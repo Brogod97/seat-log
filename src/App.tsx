@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { toPng } from 'html-to-image'
 import SeatMapForm from './components/SeatMapForm'
 import SeatMapPreview from './components/SeatMapPreview'
@@ -6,6 +6,16 @@ import SeatMapExport from './components/SeatMapExport'
 import type { SeatMapConfig, Range } from './types'
 
 export type EditMode = 'gridSize' | 'excluded' | 'prime' | 'watched' | 'aisle' | null
+
+const STORAGE_KEY = 'seat_map_current'
+
+function loadConfig(): SeatMapConfig {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (saved) return { ...DEFAULT_CONFIG, ...JSON.parse(saved) }
+  } catch {}
+  return DEFAULT_CONFIG
+}
 
 const DEFAULT_CONFIG: SeatMapConfig = {
   brand: '',
@@ -22,8 +32,12 @@ const DEFAULT_CONFIG: SeatMapConfig = {
 }
 
 function App() {
-  const [config, setConfig] = useState<SeatMapConfig>(DEFAULT_CONFIG)
+  const [config, setConfig] = useState<SeatMapConfig>(loadConfig)
   const [editMode, setEditMode] = useState<EditMode>(null)
+
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(config)) } catch {}
+  }, [config])
   const [snapshot, setSnapshot] = useState<SeatMapConfig | null>(null)
   const [modeStartPos, setModeStartPos] = useState<{ row: number; col: number } | null>(null)
   const exportRef = useRef<HTMLDivElement>(null)
