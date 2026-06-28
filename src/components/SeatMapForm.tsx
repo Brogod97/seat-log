@@ -9,6 +9,7 @@ interface Props {
   onChange: (config: SeatMapConfig) => void
   editMode: EditMode
   onEnterEditMode: (mode: EditMode) => void
+  onEnterGridResize: () => void
   onCancelEditMode: () => void
   onCompleteEditMode: () => void
 }
@@ -87,7 +88,7 @@ function CountInput({ label, value, onChange }: { label: string; value: number; 
 
 export default function SeatMapForm({
   config, onChange, editMode,
-  onEnterEditMode, onCancelEditMode, onCompleteEditMode,
+  onEnterEditMode, onEnterGridResize, onCancelEditMode, onCompleteEditMode,
 }: Props) {
   function update(partial: Partial<SeatMapConfig>) {
     onChange({ ...config, ...partial })
@@ -107,23 +108,21 @@ export default function SeatMapForm({
 
       <hr className="my-4 border-gray-200" />
 
-      {/* 그리드 크기 */}
+      {/* 레이아웃 (그리드 크기 + 복도 + 제외 영역 통합) */}
       <div className="mb-4">
-        <div className="flex items-center justify-between mb-1">
-          <label className="text-sm font-medium text-gray-700">그리드 크기</label>
-          <EditModeButton label="편집" color="indigo" mode="gridSize" active={editMode === 'gridSize'} {...btnProps} />
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-sm font-medium text-gray-700">레이아웃</label>
+          <div className="flex gap-1 items-center">
+            {editMode === null && (
+              <button type="button" onClick={onEnterGridResize}
+                className="text-xs px-2 py-1 rounded border border-gray-300 text-gray-500 hover:bg-gray-50 transition-colors">
+                초기화
+              </button>
+            )}
+            <EditModeButton label="편집" color="indigo" mode="layout" active={editMode === 'layout'} {...btnProps} />
+          </div>
         </div>
-        <p className="text-sm text-gray-500">{config.rows}행 × {config.cols}열</p>
-      </div>
-
-      <hr className="my-4 border-gray-200" />
-
-      {/* 복도 */}
-      <Section
-        label="복도"
-        button={<EditModeButton label="편집" color="indigo" mode="aisle" active={editMode === 'aisle'} {...btnProps} />}
-        resetIcon={<ResetIcon onClick={() => update({ rowAisles: [], colAisles: [] })} title="복도 초기화" disabled={config.rowAisles.length === 0 && config.colAisles.length === 0} />}
-      >
+        <p className="text-sm text-gray-500 mb-2">{config.rows}행 × {config.cols}열</p>
         <div className="flex flex-wrap gap-1">
           {config.rowAisles.map((v) => (
             <span key={`r${v}`} className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-800 text-xs rounded">
@@ -137,18 +136,14 @@ export default function SeatMapForm({
               <button type="button" onClick={() => update({ colAisles: config.colAisles.filter((x) => x !== v) })} className="hover:text-red-600">×</button>
             </span>
           ))}
+          {config.excludedSeats.length > 0 && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">
+              제외 {config.excludedSeats.length}석
+              <button type="button" onClick={() => update({ excludedSeats: [] })} className="hover:text-red-600">×</button>
+            </span>
+          )}
         </div>
-      </Section>
-
-      {/* 제외 영역 */}
-      <Section
-        label="제외 영역"
-        resetIcon={<ResetIcon onClick={() => update({ excludedSeats: [] })} title="제외 영역 초기화" disabled={config.excludedSeats.length === 0} />}
-      >
-        {config.excludedSeats.length > 0 && (
-          <p className="text-xs text-gray-400">{config.excludedSeats.length}개 좌석 제외됨</p>
-        )}
-      </Section>
+      </div>
 
       <hr className="my-4 border-gray-200" />
 

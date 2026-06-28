@@ -5,9 +5,14 @@ import SeatMapPreview from './components/SeatMapPreview'
 import SeatMapExport from './components/SeatMapExport'
 import type { SeatMapConfig, Range } from './types'
 
-export type EditMode = 'gridSize' | 'excluded' | 'prime' | 'watched' | 'aisle' | null
+export type EditMode = 'layout' | 'prime' | 'watched' | null
 
 const STORAGE_KEY = 'seat_map_current'
+const SAVES_KEY = 'seat_map_saves'
+
+function configKey(c: SeatMapConfig): string {
+  return [c.brand, c.branch, c.screen].filter(Boolean).join('|') || '이름 없음'
+}
 
 function loadConfig(): SeatMapConfig {
   try {
@@ -15,6 +20,14 @@ function loadConfig(): SeatMapConfig {
     if (saved) return { ...DEFAULT_CONFIG, ...JSON.parse(saved) }
   } catch {}
   return DEFAULT_CONFIG
+}
+
+function loadSaves(): Record<string, SeatMapConfig> {
+  try { return JSON.parse(localStorage.getItem(SAVES_KEY) ?? '{}') } catch { return {} }
+}
+
+function writeSaves(saves: Record<string, SeatMapConfig>) {
+  try { localStorage.setItem(SAVES_KEY, JSON.stringify(saves)) } catch {}
 }
 
 const DEFAULT_CONFIG: SeatMapConfig = {
@@ -34,10 +47,58 @@ const DEFAULT_CONFIG: SeatMapConfig = {
 function App() {
   const [config, setConfig] = useState<SeatMapConfig>(loadConfig)
   const [editMode, setEditMode] = useState<EditMode>(null)
+  const [saves, setSaves] = useState<Record<string, SeatMapConfig>>(loadSaves)
+  const importRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(config)) } catch {}
   }, [config])
+
+  function saveCurrentConfig() {
+    const key = configKey(config)
+    const next = { ...saves, [key]: config }
+    setSaves(next)
+    writeSaves(next)
+  }
+
+  function loadSavedConfig(key: string) {
+    const saved = saves[key]
+    if (saved) { setConfig({ ...DEFAULT_CONFIG, ...saved }); setEditMode(null) }
+  }
+
+  function deleteSavedConfig(key: string) {
+    const next = { ...saves }
+    delete next[key]
+    setSaves(next)
+    writeSaves(next)
+  }
+
+  function exportJson() {
+    const blob = new Blob([JSON.stringify(saves, null, 2)], { type: 'application/json' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = 'seat-maps.json'
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
+  function importJson(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      try {
+        const parsed = JSON.parse(ev.target?.result as string)
+        if (typeof parsed === 'object' && parsed !== null) {
+          const next = { ...saves, ...parsed }
+          setSaves(next)
+          writeSaves(next)
+        }
+      } catch { alert('파일을 읽을 수 없어요.') }
+      if (importRef.current) importRef.current.value = ''
+    }
+    reader.readAsText(file)
+  }
   const [snapshot, setSnapshot] = useState<SeatMapConfig | null>(null)
   const [modeStartPos, setModeStartPos] = useState<{ row: number; col: number } | null>(null)
   const exportRef = useRef<HTMLDivElement>(null)
@@ -56,6 +117,16 @@ function App() {
     setSnapshot(config)
     setEditMode(mode)
     setModeStartPos(null)
+    // 레이아웃 편집은 기존 그리드를 유지한 채 복도/제외 편집(2단계)으로 바로 진입
+    if (mode === 'layout') setLayoutPhase('edit')
+  }
+
+  // 그리드 크기부터 다시 짜기 (모든 레이어 초기화)
+  function enterGridResize() {
+    setSnapshot(config)
+    setEditMode('layout')
+    setModeStartPos(null)
+    setLayoutPhase('size')
   }
 
   // 좌석 클릭 메뉴에서 편집 모드 진입 (시작 좌석 미리 지정)
@@ -90,8 +161,11 @@ function App() {
       watchedSeats: [],
       excludedSeats: [],
     }))
-    completeEditMode()
+    // 크기 확정 후 layout 2단계(복도/제외 편집)로 자동 전환
+    setLayoutPhase('edit')
   }
+
+  const [layoutPhase, setLayoutPhase] = useState<'size' | 'edit'>('size')
 
   function addPrimeRange(range: Range) {
     setConfig((c) => ({ ...c, primeRanges: [...c.primeRanges, range] }))
@@ -207,7 +281,7 @@ function App() {
   return (
     <div className="flex h-screen bg-gray-50">
       <aside className="w-80 shrink-0 bg-white border-r border-gray-200 p-6 overflow-y-auto">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4">
           <h1 className="text-lg font-bold text-gray-800">좌석표 생성기</h1>
           <button
             type="button"
@@ -217,11 +291,62 @@ function App() {
             초기화
           </button>
         </div>
+
+        {/* 저장 / 불러오기 */}
+        <div className="mb-4 pb-4 border-b border-gray-200">
+          {/* 불러오기 드롭다운 */}
+          {Object.keys(saves).length > 0 && (
+            <div className="mb-2">
+              <select
+                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                defaultValue=""
+                onChange={(e) => { if (e.target.value) loadSavedConfig(e.target.value) }}
+              >
+                <option value="">저장된 좌석표 불러오기</option>
+                {Object.keys(saves).map((key) => (
+                  <option key={key} value={key}>
+                    {key.replace(/\|/g, ' ')}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* 저장 / JSON */}
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              onClick={saveCurrentConfig}
+              className="flex-1 text-xs px-2 py-1.5 bg-gray-800 text-white rounded hover:bg-gray-700 transition-colors"
+            >
+              현재 저장
+            </button>
+            <button
+              type="button"
+              onClick={exportJson}
+              disabled={Object.keys(saves).length === 0}
+              className="text-xs px-2 py-1.5 border border-gray-300 rounded text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              title="JSON 내보내기"
+            >
+              내보내기
+            </button>
+            <button
+              type="button"
+              onClick={() => importRef.current?.click()}
+              className="text-xs px-2 py-1.5 border border-gray-300 rounded text-gray-600 hover:bg-gray-50 transition-colors"
+              title="JSON 가져오기"
+            >
+              가져오기
+            </button>
+            <input ref={importRef} type="file" accept=".json" className="hidden" onChange={importJson} />
+          </div>
+        </div>
         <SeatMapForm
           config={config}
           onChange={setConfig}
           editMode={editMode}
           onEnterEditMode={enterEditMode}
+          onEnterGridResize={enterGridResize}
           onCancelEditMode={cancelEditMode}
           onCompleteEditMode={completeEditMode}
         />
@@ -240,6 +365,7 @@ function App() {
         <SeatMapPreview
           config={config}
           editMode={editMode}
+          layoutPhase={layoutPhase}
           modeStartPos={modeStartPos}
           onEnterModeFrom={enterModeFrom}
           onCancelEditMode={cancelEditMode}

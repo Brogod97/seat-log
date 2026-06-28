@@ -11,6 +11,7 @@ const GHOST_CELL = 18
 interface Props {
   config: SeatMapConfig
   editMode: EditMode
+  layoutPhase: 'size' | 'edit'
   modeStartPos: { row: number; col: number } | null
   onEnterModeFrom: (mode: 'prime' | 'watched' | 'excluded', pos: { row: number; col: number }) => void
   onCancelEditMode: () => void
@@ -79,21 +80,15 @@ function getAppliedLayers(
 }
 
 const MODE_STATUS: Record<NonNullable<EditMode>, (arg: boolean | number) => string> = {
-  gridSize: () => '마우스를 움직여 크기 지정 후 클릭',
-  excluded: (n) => (n as number) > 0
-    ? `꼭짓점 ${n}개 선택됨 — 첫 번째 꼭짓점 클릭으로 확정`
-    : '제외할 영역의 꼭짓점을 순서대로 클릭하세요',
-  prime:    (f) => f ? '끝 좌석을 클릭 또는 드래그해 범위 확정' : '시작 좌석 클릭 또는 드래그 시작',
-  watched:  (f) => f ? '끝 좌석 클릭 (같은 좌석 = 1칸)' : '시작 좌석 클릭',
-  aisle: () => '좌석 사이 빈 공간에 hover 후 클릭해 복도 추가/제거',
+  layout:  () => '',  // phase별로 직접 표시
+  prime:   (f) => f ? '끝 좌석을 클릭 또는 드래그해 범위 확정' : '시작 좌석 클릭 또는 드래그 시작',
+  watched: (f) => f ? '끝 좌석 클릭 (같은 좌석 = 1칸)' : '시작 좌석 클릭',
 }
 
 const MODE_RING: Record<NonNullable<EditMode>, string> = {
-  gridSize: 'ring-indigo-400 bg-indigo-50',
-  excluded: 'ring-gray-400 bg-gray-50',
-  prime:    'ring-red-400 bg-red-50',
-  watched:  'ring-yellow-400 bg-yellow-50',
-  aisle:    'ring-indigo-400 bg-indigo-50',
+  layout:  'ring-indigo-400 bg-indigo-50',
+  prime:   'ring-red-400 bg-red-50',
+  watched: 'ring-yellow-400 bg-yellow-50',
 }
 
 // 폴리곤 내부 판정 (ray casting)
@@ -136,7 +131,7 @@ function pointInOrOnPolygon(row: number, col: number, vertices: SeatPos[]): bool
 }
 
 export default function SeatMapPreview({
-  config, editMode, modeStartPos,
+  config, editMode, layoutPhase, modeStartPos,
   onEnterModeFrom,
   onCancelEditMode, onCompleteEditMode, onSetGridSize,
   onToggleExcludedSeat, onAddExcludedRange, onExcludeSeats,
@@ -172,14 +167,11 @@ export default function SeatMapPreview({
 
   // 좌석 픽셀 중심 계산 (SVG 오버레이용)
   // 열: flex container에 gap:2가 있어서 gap div 양쪽에 2px씩 추가됨
-  //   = seat(32) + flex_gap(2) + gap_div(2) + flex_gap(2) = 38px per col
-  //   aisle의 경우 gap_div가 12px → extra 10px
-  // 행: 외부 div는 gap 없음
-  //   = seat(32) + gap_div(2) = 34px per row
+  // layout edit 모드에서는 gap div가 8px으로 확장되어 COL/ROW_STEP이 달라짐
   function seatPixelCenter(row: number, col: number): { x: number; y: number } {
-    const COL_STEP = SEAT + 2 + 2 + 2   // 38
-    const ROW_STEP = SEAT + 2            // 34
-    const AISLE_EXTRA = AISLE - 2        // 10
+    const COL_STEP = SEAT + 2 + normalGap + 2   // flex_gap(2) + gap_div + flex_gap(2)
+    const ROW_STEP = SEAT + normalGap            // seat + gap_div
+    const AISLE_EXTRA = AISLE - normalGap        // aisle 추가 여백
 
     let x = (col - 1) * COL_STEP + SEAT / 2
     for (let c = 1; c < col; c++) {
@@ -195,20 +187,24 @@ export default function SeatMapPreview({
   }
 
   // 전체 그리드 픽셀 크기 계산
+  const isLayoutEdit = editMode === 'layout' && layoutPhase === 'edit'
+  const normalGap = isLayoutEdit ? 8 : 2
   const gridPixelWidth = (() => {
-    let w = cols * (SEAT + 2) - 2
-    colAisles.forEach(() => { w += AISLE - 2 })
+    let w = cols * (SEAT + normalGap) - normalGap
+    colAisles.forEach(() => { w += AISLE - normalGap })
     return w
   })()
   const gridPixelHeight = (() => {
-    let h = rows * (SEAT + 2) - 2
-    rowAisles.forEach(() => { h += AISLE - 2 })
+    let h = rows * (SEAT + normalGap) - normalGap
+    rowAisles.forEach(() => { h += AISLE - normalGap })
     return h
   })()
 
-  // 폴리곤 확정: excluded 모드에서 editMode가 null이 될 때
+  // 폴리곤 확정: excluded 진입 후 모드/페이즈가 바뀔 때
+  const wasExcludedRef = useRef(false)
   useEffect(() => {
-    if (prevEditModeRef.current === 'excluded' && editMode !== 'excluded') {
+    const isExcludedNow = editMode === 'excluded' || (editMode === null && wasExcludedRef.current)
+    if (wasExcludedRef.current && !isExcludedNow) {
       if (polyVertices.length >= 3) {
         const seats: { row: number; col: number }[] = []
         for (let r = 1; r <= rows; r++) {
@@ -220,6 +216,7 @@ export default function SeatMapPreview({
       }
       setPolyVertices([])
     }
+    wasExcludedRef.current = editMode === 'excluded'
     prevEditModeRef.current = editMode
   }, [editMode])
 
@@ -272,8 +269,9 @@ export default function SeatMapPreview({
     const highlight = isHighlighted(row, col)
     const isExcluded = config.excludedSeats.some((s) => s.row === row && s.col === col)
 
-    // excluded 폴리곤 미리보기
-    if (editMode === 'excluded') {
+    // excluded 폴리곤 미리보기 (excluded 모드 또는 layout 2단계)
+    const isPolyMode = editMode === 'excluded' || (editMode === 'layout' && layoutPhase === 'edit')
+    if (isPolyMode) {
       const isFirstVertex = polyVertices[0]?.row === row && polyVertices[0]?.col === col
       const isVertex = polyVertices.some((v) => v.row === row && v.col === col)
       if (isFirstVertex && polyVertices.length >= 3)
@@ -347,18 +345,39 @@ export default function SeatMapPreview({
       }
       setPolyVertices((v) => [...v, { row, col }]); return
     }
-    if (editMode === 'aisle') return  // 갭 div에서 처리
-    // 일반 모드 or range 모드 진입 후 첫 클릭: 항상 팝업 표시
+    // layout 2단계: 좌석 클릭 = 폴리곤 제외 선택
+    if (editMode === 'layout' && layoutPhase === 'edit') {
+      const first = polyVertices[0]
+      if (polyVertices.length >= 3 && first && first.row === row && first.col === col) {
+        // 폴리곤 확정
+        const seats: { row: number; col: number }[] = []
+        for (let r = 1; r <= rows; r++) {
+          for (let c = 1; c <= cols; c++) {
+            if (pointInOrOnPolygon(r, c, polyVertices)) seats.push({ row: r, col: c })
+          }
+        }
+        if (seats.length > 0) onExcludeSeats(seats)
+        setPolyVertices([])
+      } else {
+        setPolyVertices((v) => [...v, { row, col }])
+      }
+      return
+    }
+    // 일반 모드: 팝업 표시
     if (!isRangeMode) {
       setPopup({ x: e.clientX, y: e.clientY, row, col })
     }
   }
 
-  const modeInfo = editMode
-    ? editMode === 'excluded'
-      ? MODE_STATUS['excluded'](polyVertices.length)
-      : MODE_STATUS[editMode](!!firstClick)
-    : null
+  const modeInfo = editMode === 'layout'
+    ? layoutPhase === 'size'
+      ? '크기를 선택하세요'
+      : polyVertices.length === 0
+        ? '갭 클릭 = 복도  |  좌석 클릭 = 제외 영역 꼭짓점 시작'
+        : `꼭짓점 ${polyVertices.length}개 — 계속 클릭하거나 첫 꼭짓점으로 확정`
+    : editMode
+      ? MODE_STATUS[editMode](!!firstClick)
+      : null
   const ringClass = editMode ? (MODE_RING[editMode] ?? '') : ''
 
   return (
@@ -368,6 +387,34 @@ export default function SeatMapPreview({
         <h2 className="text-xl font-bold text-gray-800 mb-4">
           {[config.brand, config.branch, config.screen].filter(Boolean).join(' ')}
         </h2>
+      )}
+
+      {/* 정보 */}
+      <p className="text-sm text-gray-500 mb-3">
+        {rows}행 × {cols}열
+        <span className="mx-2 text-gray-300">|</span>
+        총 {rows * cols - config.excludedSeats.length}석
+        {centerCols.length > 0 && (
+          <span className="ml-2 text-blue-500">중앙열 {centerCols.join(', ')}열</span>
+        )}
+      </p>
+
+      {/* 편집 모드 안내 */}
+      {editMode && modeInfo && (
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
+            {modeInfo}
+          </span>
+          {editMode === 'layout' && layoutPhase === 'edit' && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onCancelEditMode() }}
+              className="text-xs text-indigo-500 hover:text-indigo-700"
+            >
+              ↩ 크기 재설정
+            </button>
+          )}
+        </div>
       )}
 
       {/* 범례 */}
@@ -384,8 +431,9 @@ export default function SeatMapPreview({
         ))}
       </div>
 
-      {/* Ghost 그리드 (gridSize 편집 모드) */}
-      {editMode === 'gridSize' && (
+      {/* Ghost 그리드 (layout 1단계: 크기 선택) */}
+      {editMode === 'layout' && layoutPhase === 'size' && (
+        <div onClick={(e) => e.stopPropagation()}>
         <GhostGrid
           currentRows={config.rows}
           currentCols={config.cols}
@@ -394,10 +442,11 @@ export default function SeatMapPreview({
           onConfirm={(rows, cols) => onSetGridSize(rows, cols)}
           onLeave={() => setHoverPos(null)}
         />
+        </div>
       )}
 
-      {/* 그리드 */}
-      {editMode !== 'gridSize' && <div
+      {/* 그리드 (layout 2단계 or 일반 모드) */}
+      {!(editMode === 'layout' && layoutPhase === 'size') && <div
         className={`inline-block relative rounded-lg transition-all duration-150 ${editMode ? `ring-2 ring-offset-4 p-3 ${ringClass}` : ''}`}
         onClick={(e) => e.stopPropagation()}
         onMouseLeave={() => { setHoverPos(null); if (isRangeMode) { setDragStart(null); setIsDragging(false) } }}
@@ -411,7 +460,7 @@ export default function SeatMapPreview({
       >
         <div style={{ display: 'inline-block', userSelect: 'none', position: 'relative' }}>
           {/* 폴리곤 SVG 오버레이 — inner div 기준으로 절대 위치 */}
-          {editMode === 'excluded' && polyPreviewVertices.length >= 2 && (
+          {(editMode === 'excluded' || (editMode === 'layout' && layoutPhase === 'edit')) && polyPreviewVertices.length >= 2 && (
             <svg
               style={{
                 position: 'absolute', top: 0, left: 0,
@@ -480,7 +529,7 @@ export default function SeatMapPreview({
                         </div>
 
                         {col < cols && (() => {
-                          const isColAisleMode = editMode === 'aisle'
+                          const isColAisleMode = editMode === 'layout' && layoutPhase === 'edit'
                           const isHovered = isColAisleMode && hoverAisleCol === col
                           const w = isAisleCol ? AISLE : isColAisleMode ? 8 : 2
                           return (
@@ -515,7 +564,7 @@ export default function SeatMapPreview({
                 </div>
 
                 {row < rows && (() => {
-                  const isRowAisleMode = editMode === 'aisle'
+                  const isRowAisleMode = editMode === 'layout' && layoutPhase === 'edit'
                   const isHovered = isRowAisleMode && hoverAisleRow === row
                   const h = isAisleRow ? AISLE : isRowAisleMode ? 8 : 2
                   return (
@@ -588,36 +637,65 @@ function GhostGrid({
   const hoverRow = hoverPos?.row ?? currentRows
   const hoverCol = hoverPos?.col ?? currentCols
 
+  const LABEL_W = 20  // 행 레이블 너비
+
   return (
     <div onMouseLeave={onLeave}>
       <div className="text-sm font-medium text-indigo-700 mb-2">
-        {hoverRow}행 × {hoverCol}열
+        {indexToLabel(hoverRow - 1)}{hoverCol} 까지 — {hoverRow}행 × {hoverCol}열
       </div>
       <div style={{ display: 'inline-block', userSelect: 'none' }}>
-        {Array.from({ length: GHOST_MAX_ROWS }, (_, ri) => (
-          <div key={ri} style={{ display: 'flex', gap: 1, marginBottom: 1 }}>
-            {Array.from({ length: GHOST_MAX_COLS }, (_, ci) => {
-              const row = ri + 1
-              const col = ci + 1
-              const inSelected = row <= hoverRow && col <= hoverCol
-              const isBorder = row === hoverRow || col === hoverCol
-              return (
-                <div
-                  key={ci}
-                  style={{ width: GHOST_CELL, height: GHOST_CELL, flexShrink: 0 }}
-                  className={[
-                    'rounded-sm cursor-pointer transition-colors',
-                    inSelected
-                      ? isBorder ? 'bg-indigo-400' : 'bg-indigo-200'
-                      : 'bg-gray-100 hover:bg-gray-200',
-                  ].join(' ')}
-                  onMouseEnter={() => onHover({ row, col })}
-                  onClick={() => onConfirm(row, col)}
-                />
-              )
-            })}
-          </div>
-        ))}
+        {/* 상단 열 번호 축 */}
+        <div style={{ display: 'flex', gap: 1, marginBottom: 3, paddingLeft: LABEL_W + 1 }}>
+          {Array.from({ length: GHOST_MAX_COLS }, (_, ci) => {
+            const col = ci + 1
+            const show = col === 1 || col % 5 === 0 || col === hoverCol
+            return (
+              <div
+                key={ci}
+                style={{ width: GHOST_CELL, flexShrink: 0, textAlign: 'center' }}
+                className={`text-xs ${col <= hoverCol ? 'text-indigo-500' : 'text-gray-300'}`}
+              >
+                {show ? col : ''}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* 행 */}
+        {Array.from({ length: GHOST_MAX_ROWS }, (_, ri) => {
+          const row = ri + 1
+          return (
+            <div key={ri} style={{ display: 'flex', gap: 1, marginBottom: 1, alignItems: 'center' }}>
+              {/* 좌측 행 레이블 */}
+              <div
+                style={{ width: LABEL_W, flexShrink: 0, textAlign: 'right', paddingRight: 4 }}
+                className={`text-xs ${row <= hoverRow ? 'text-indigo-500' : 'text-gray-300'}`}
+              >
+                {indexToLabel(ri)}
+              </div>
+              {Array.from({ length: GHOST_MAX_COLS }, (_, ci) => {
+                const col = ci + 1
+                const inSelected = row <= hoverRow && col <= hoverCol
+                const isBorder = row === hoverRow || col === hoverCol
+                return (
+                  <div
+                    key={ci}
+                    style={{ width: GHOST_CELL, height: GHOST_CELL, flexShrink: 0 }}
+                    className={[
+                      'rounded-sm cursor-pointer transition-colors',
+                      inSelected
+                        ? isBorder ? 'bg-indigo-400' : 'bg-indigo-200'
+                        : 'bg-gray-100 hover:bg-gray-200',
+                    ].join(' ')}
+                    onMouseEnter={() => onHover({ row, col })}
+                    onClick={() => onConfirm(row, col)}
+                  />
+                )
+              })}
+            </div>
+          )
+        })}
       </div>
     </div>
   )
@@ -669,7 +747,7 @@ const SeatPopup = forwardRef<HTMLDivElement, SeatPopupProps>(
       { label: isSightRow ? '시선일치행 해제' : '시선일치행 설정', action: () => { onToggleSightRow(row); onClose() } },
       { label: '명당 범위 설정', action: () => { onClose(); onEnterModeFrom('prime', { row, col }) } },
       { label: '실관람 설정', action: () => { onClose(); onEnterModeFrom('watched', { row, col }) } },
-      { label: isExcluded ? '제외 해제' : '제외 영역 설정', action: () => { if (isExcluded) { onToggleExcludedSeat(row, col); onClose() } else { onClose(); onEnterModeFrom('excluded', { row, col }) } } },
+      isExcluded ? { label: '제외 해제', action: () => { onToggleExcludedSeat(row, col); onClose() } } : null,
       isCenter ? { info: true, label: '중앙열 (자동 계산)' } : null,
     ].filter(Boolean) as Row[]
 
