@@ -11,14 +11,17 @@ const GHOST_CELL = 18
 interface Props {
   config: SeatMapConfig
   editMode: EditMode
+  modeStartPos: { row: number; col: number } | null
+  onEnterModeFrom: (mode: 'prime' | 'watched' | 'excluded', pos: { row: number; col: number }) => void
   onCancelEditMode: () => void
   onCompleteEditMode: () => void
   onSetGridSize: (rows: number, cols: number) => void
   onAddPrimeRange: (range: Range) => void
   onRemovePrimeRange: (index: number) => void
+  onAddWatchedRange: (range: Range) => void
   onToggleWatchedSeat: (row: number, col: number) => void
   onToggleSightRow: (row: number) => void
-  onToggleRowAisle: (row: number) => void
+  onToggleAisle: (row: number) => void
   onToggleColAisle: (col: number) => void
   onToggleExcludedSeat: (row: number, col: number) => void
   onAddExcludedRange: (range: Range) => void
@@ -78,13 +81,11 @@ function getAppliedLayers(
 const MODE_STATUS: Record<NonNullable<EditMode>, (arg: boolean | number) => string> = {
   gridSize: () => '마우스를 움직여 크기 지정 후 클릭',
   excluded: (n) => (n as number) > 0
-    ? `꼭짓점 ${n}개 선택됨 — 계속 클릭하거나 바깥 클릭으로 확정`
+    ? `꼭짓점 ${n}개 선택됨 — 첫 번째 꼭짓점 클릭으로 확정`
     : '제외할 영역의 꼭짓점을 순서대로 클릭하세요',
-  prime:    (f) => f ? '두 번째 좌석 클릭 또는 드래그해 범위 확정' : '시작 좌석 클릭 또는 드래그 시작',
-  watched:  () => '좌석 클릭으로 실관람 토글',
-  sightRow: () => '행 클릭으로 시선일치행 토글',
-  rowAisle: () => '행 클릭으로 가로 복도 토글',
-  colAisle: () => '열 클릭으로 세로 복도 토글',
+  prime:    (f) => f ? '끝 좌석을 클릭 또는 드래그해 범위 확정' : '시작 좌석 클릭 또는 드래그 시작',
+  watched:  (f) => f ? '끝 좌석 클릭 (같은 좌석 = 1칸)' : '시작 좌석 클릭',
+  aisle: () => '좌석 사이 빈 공간에 hover 후 클릭해 복도 추가/제거',
 }
 
 const MODE_RING: Record<NonNullable<EditMode>, string> = {
@@ -92,9 +93,7 @@ const MODE_RING: Record<NonNullable<EditMode>, string> = {
   excluded: 'ring-gray-400 bg-gray-50',
   prime:    'ring-red-400 bg-red-50',
   watched:  'ring-yellow-400 bg-yellow-50',
-  sightRow: 'ring-green-400 bg-green-50',
-  rowAisle: 'ring-indigo-400 bg-indigo-50',
-  colAisle: 'ring-indigo-400 bg-indigo-50',
+  aisle:    'ring-indigo-400 bg-indigo-50',
 }
 
 // 폴리곤 내부 판정 (ray casting)
@@ -137,12 +136,13 @@ function pointInOrOnPolygon(row: number, col: number, vertices: SeatPos[]): bool
 }
 
 export default function SeatMapPreview({
-  config, editMode,
+  config, editMode, modeStartPos,
+  onEnterModeFrom,
   onCancelEditMode, onCompleteEditMode, onSetGridSize,
   onToggleExcludedSeat, onAddExcludedRange, onExcludeSeats,
   onAddPrimeRange, onRemovePrimeRange,
-  onToggleWatchedSeat, onToggleSightRow,
-  onToggleRowAisle, onToggleColAisle,
+  onAddWatchedRange, onToggleWatchedSeat, onToggleSightRow,
+  onToggleAisle, onToggleColAisle,
 }: Props) {
   const { rows, cols, rowAisles, colAisles } = config
   const SEAT = 32
@@ -157,6 +157,8 @@ export default function SeatMapPreview({
   const [dragStart, setDragStart] = useState<SeatPos | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [hoverPos, setHoverPos] = useState<SeatPos | null>(null)
+  const [hoverAisleRow, setHoverAisleRow] = useState<number | null>(null)
+  const [hoverAisleCol, setHoverAisleCol] = useState<number | null>(null)
   const [popup, setPopup] = useState<PopupState | null>(null)
   const [highlightHint, setHighlightHint] = useState<HighlightHint>(null)
 
@@ -236,10 +238,20 @@ export default function SeatMapPreview({
   }, [popup])
 
   useEffect(() => {
-    if (!editMode) { setFirstClick(null); setDragStart(null); setIsDragging(false) }
-  }, [editMode])
+    if (!editMode) {
+      setFirstClick(null); setDragStart(null); setIsDragging(false)
+      setPolyVertices([])
+      return
+    }
+    if ((editMode === 'prime' || editMode === 'watched') && modeStartPos) {
+      setFirstClick(modeStartPos)
+    }
+    if (editMode === 'excluded' && modeStartPos) {
+      setPolyVertices([modeStartPos])
+    }
+  }, [editMode, modeStartPos])
 
-  const isRangeMode = editMode === 'prime'
+  const isRangeMode = editMode === 'prime' || editMode === 'watched'
 
   const previewRange: Range | null = (() => {
     if (!isRangeMode || !hoverPos) return null
@@ -275,15 +287,14 @@ export default function SeatMapPreview({
     // excluded seats always shown as excluded
     if (isExcluded) return { bg: 'bg-white', ring: 'ring-1 ring-gray-300', highlight, excluded: true }
 
-    // prime preview
-    if (editMode === 'prime') {
+    // prime / watched 범위 미리보기
+    if (editMode === 'prime' || editMode === 'watched') {
       const isFirst = firstClick?.row === row && firstClick?.col === col
       const isDragOrigin = isDragging && dragStart?.row === row && dragStart?.col === col
-      if (isFirst || isDragOrigin) return { bg: 'bg-red-400', ring: null, highlight, excluded: false }
-      if (previewRange && inRange(row, col, previewRange)) return { bg: 'bg-red-200', ring: null, highlight, excluded: false }
-    }
-    if (editMode === 'sightRow' && hoverPos?.row === row) {
-      return { bg: 'bg-green-200', ring: null, highlight, excluded: false }
+      const previewBg = editMode === 'prime' ? 'bg-red-400' : 'bg-yellow-400'
+      const previewRangeBg = editMode === 'prime' ? 'bg-red-200' : 'bg-yellow-200'
+      if (isFirst || isDragOrigin) return { bg: previewBg, ring: null, highlight, excluded: false }
+      if (previewRange && inRange(row, col, previewRange)) return { bg: previewRangeBg, ring: null, highlight, excluded: false }
     }
 
     // stored data layers
@@ -303,12 +314,16 @@ export default function SeatMapPreview({
     if (dragStart && (dragStart.row !== pos.row || dragStart.col !== pos.col)) setIsDragging(true)
   }
 
+  function commitRange(range: Range) {
+    if (editMode === 'prime') onAddPrimeRange(range)
+    else if (editMode === 'watched') onAddWatchedRange(range)
+    else if (editMode === 'excluded') onAddExcludedRange(range)
+  }
+
   function handleRangeMouseUp(pos: SeatPos) {
     if (isDragging && dragStart) {
       dragHandledRef.current = true
-      const range = normalizeRange(dragStart, pos)
-      if (editMode === 'prime') onAddPrimeRange(range)
-      else if (editMode === 'excluded') onAddExcludedRange(range)
+      commitRange(normalizeRange(dragStart, pos))
       setDragStart(null); setIsDragging(false)
       onCompleteEditMode(); return
     }
@@ -317,9 +332,7 @@ export default function SeatMapPreview({
       setFirstClick(pos)
     } else {
       suppressNextClickRef.current = true
-      const range = normalizeRange(firstClick, pos)
-      if (editMode === 'prime') onAddPrimeRange(range)
-      else if (editMode === 'excluded') onAddExcludedRange(range)
+      commitRange(normalizeRange(firstClick, pos))
       setFirstClick(null)
       onCompleteEditMode()
     }
@@ -327,23 +340,18 @@ export default function SeatMapPreview({
 
   function handleSeatClick(row: number, col: number, e: React.MouseEvent) {
     if (suppressNextClickRef.current) { suppressNextClickRef.current = false; return }
-    if (editMode === 'watched') { onToggleWatchedSeat(row, col); return }
-    if (editMode === 'sightRow') { onToggleSightRow(row); return }
     if (editMode === 'excluded') {
       const first = polyVertices[0]
       if (polyVertices.length >= 3 && first && first.row === row && first.col === col) {
-        onCompleteEditMode()  // useEffect가 polyVertices로 채움
-        return
+        onCompleteEditMode(); return
       }
-      setPolyVertices((v) => [...v, { row, col }])
-      return
+      setPolyVertices((v) => [...v, { row, col }]); return
     }
-    if (editMode === 'rowAisle') { if (row < rows) onToggleRowAisle(row); return }
-    if (editMode === 'colAisle') { if (col < cols) onToggleColAisle(col); return }
-    // normal mode: popup
-    const isExcluded = config.excludedSeats.some((s) => s.row === row && s.col === col)
-    const layers = getAppliedLayers(row, col, config, centerCols)
-    if (layers.length > 0 || isExcluded) setPopup({ x: e.clientX, y: e.clientY, row, col })
+    if (editMode === 'aisle') return  // 갭 div에서 처리
+    // 일반 모드 or range 모드 진입 후 첫 클릭: 항상 팝업 표시
+    if (!isRangeMode) {
+      setPopup({ x: e.clientX, y: e.clientY, row, col })
+    }
   }
 
   const modeInfo = editMode
@@ -351,7 +359,7 @@ export default function SeatMapPreview({
       ? MODE_STATUS['excluded'](polyVertices.length)
       : MODE_STATUS[editMode](!!firstClick)
     : null
-  const ringClass = editMode ? MODE_RING[editMode] : ''
+  const ringClass = editMode ? (MODE_RING[editMode] ?? '') : ''
 
   return (
     <div className="relative">
@@ -396,9 +404,7 @@ export default function SeatMapPreview({
         onMouseUp={() => {
           if (dragHandledRef.current) { dragHandledRef.current = false; return }
           if (isRangeMode && isDragging && dragStart && hoverPos) {
-            const range = normalizeRange(dragStart, hoverPos)
-            if (editMode === 'prime') onAddPrimeRange(range)
-            else if (editMode === 'excluded') onAddExcludedRange(range)
+            commitRange(normalizeRange(dragStart, hoverPos))
             setDragStart(null); setIsDragging(false); onCompleteEditMode()
           }
         }}
@@ -440,7 +446,6 @@ export default function SeatMapPreview({
           {Array.from({ length: rows }, (_, ri) => {
             const row = ri + 1
             const isAisleRow = rowAisleSet.has(row)
-            const showRowAislePreview = editMode === 'rowAisle' && hoverPos?.row === row && row < rows
 
             return (
               <div key={`row-${ri}`}>
@@ -448,7 +453,6 @@ export default function SeatMapPreview({
                   {Array.from({ length: cols }, (_, ci) => {
                     const col = ci + 1
                     const isAisleCol = colAisleSet.has(col)
-                    const showColAislePreview = editMode === 'colAisle' && hoverPos?.col === col && col < cols
                     const { bg, ring, highlight, excluded } = getSeatAppearance(row, col)
                     const inEditMode = editMode !== null
 
@@ -475,40 +479,68 @@ export default function SeatMapPreview({
                           }
                         </div>
 
-                        {col < cols && (
-                          <div
-                            key={`ca-${ri}-${ci}`}
-                            style={{
-                              width: isAisleCol ? AISLE : showColAislePreview ? AISLE_PREVIEW : 2,
-                              flexShrink: 0
-                            }}
-                            className={[
-                              'transition-all',
-                              showColAislePreview && !isAisleCol ? 'bg-indigo-300 rounded cursor-pointer' : '',
-                              isAisleCol && editMode === 'colAisle' ? 'bg-indigo-100 rounded cursor-pointer' : '',
-                            ].filter(Boolean).join(' ')}
-                            onMouseEnter={() => setHoverPos({ row, col })}
-                            onClick={() => editMode === 'colAisle' && onToggleColAisle(col)}
-                          />
-                        )}
+                        {col < cols && (() => {
+                          const isColAisleMode = editMode === 'aisle'
+                          const isHovered = isColAisleMode && hoverAisleCol === col
+                          const w = isAisleCol ? AISLE : isColAisleMode ? 8 : 2
+                          return (
+                            <div
+                              key={`ca-${ri}-${ci}`}
+                              style={{ width: w, flexShrink: 0, position: 'relative' }}
+                              className={[
+                                'transition-all',
+                                isColAisleMode ? 'cursor-col-resize' : '',
+                              ].filter(Boolean).join(' ')}
+                              onMouseEnter={() => isColAisleMode && setHoverAisleCol(col)}
+                              onMouseLeave={() => setHoverAisleCol(null)}
+                              onClick={(e) => { if (isColAisleMode) { e.stopPropagation(); onToggleColAisle(col) } }}
+                            >
+                              {isColAisleMode && (
+                                <div style={{
+                                  position: 'absolute',
+                                  top: 0, bottom: 0,
+                                  left: '50%', transform: 'translateX(-50%)',
+                                  width: isAisleCol || isHovered ? w : 2,
+                                  background: isHovered ? '#6366f1' : isAisleCol ? '#a5b4fc' : 'transparent',
+                                  borderRadius: 2,
+                                  transition: 'all 0.1s',
+                                }} />
+                              )}
+                            </div>
+                          )
+                        })()}
                       </>
                     )
                   })}
                 </div>
 
-                {row < rows && (
-                  <div
-                    key={`ra-${ri}`}
-                    style={{ height: isAisleRow ? AISLE : showRowAislePreview ? AISLE_PREVIEW : 2 }}
-                    className={[
-                      'transition-all',
-                      showRowAislePreview && !isAisleRow ? 'bg-indigo-300 rounded cursor-pointer' : '',
-                      isAisleRow && editMode === 'rowAisle' ? 'bg-indigo-100 rounded cursor-pointer' : '',
-                    ].filter(Boolean).join(' ')}
-                    onMouseEnter={() => setHoverPos({ row, col: hoverPos?.col ?? 1 })}
-                    onClick={() => editMode === 'rowAisle' && onToggleRowAisle(row)}
-                  />
-                )}
+                {row < rows && (() => {
+                  const isRowAisleMode = editMode === 'aisle'
+                  const isHovered = isRowAisleMode && hoverAisleRow === row
+                  const h = isAisleRow ? AISLE : isRowAisleMode ? 8 : 2
+                  return (
+                    <div
+                      key={`ra-${ri}`}
+                      style={{ height: h, position: 'relative' }}
+                      className={isRowAisleMode ? 'cursor-row-resize transition-all' : 'transition-all'}
+                      onMouseEnter={() => isRowAisleMode && setHoverAisleRow(row)}
+                      onMouseLeave={() => setHoverAisleRow(null)}
+                      onClick={(e) => { if (isRowAisleMode) { e.stopPropagation(); onToggleAisle(row) } }}
+                    >
+                      {isRowAisleMode && (
+                        <div style={{
+                          position: 'absolute',
+                          left: 0, right: 0,
+                          top: '50%', transform: 'translateY(-50%)',
+                          height: isAisleRow || isHovered ? h : 2,
+                          background: isHovered ? '#6366f1' : isAisleRow ? '#a5b4fc' : 'transparent',
+                          borderRadius: 2,
+                          transition: 'all 0.1s',
+                        }} />
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
             )
           })}
@@ -524,6 +556,7 @@ export default function SeatMapPreview({
           popup={popup}
           config={config}
           centerCols={centerCols}
+          onEnterModeFrom={onEnterModeFrom}
           onRemovePrimeRange={onRemovePrimeRange}
           onToggleWatchedSeat={onToggleWatchedSeat}
           onToggleSightRow={onToggleSightRow}
@@ -595,6 +628,7 @@ interface SeatPopupProps {
   popup: PopupState
   config: SeatMapConfig
   centerCols: number[]
+  onEnterModeFrom: (mode: 'prime' | 'watched' | 'excluded', pos: { row: number; col: number }) => void
   onRemovePrimeRange: (i: number) => void
   onToggleWatchedSeat: (row: number, col: number) => void
   onToggleSightRow: (row: number) => void
@@ -604,7 +638,7 @@ interface SeatPopupProps {
 }
 
 const SeatPopup = forwardRef<HTMLDivElement, SeatPopupProps>(
-  ({ popup, config, centerCols, onRemovePrimeRange, onToggleWatchedSeat, onToggleSightRow, onToggleExcludedSeat, onHoverHint, onClose }, ref) => {
+  ({ popup, config, centerCols, onEnterModeFrom, onRemovePrimeRange, onToggleWatchedSeat, onToggleSightRow, onToggleExcludedSeat, onHoverHint, onClose }, ref) => {
     const { row, col, x, y } = popup
 
     const primeMatches = config.primeRanges
@@ -615,28 +649,34 @@ const SeatPopup = forwardRef<HTMLDivElement, SeatPopupProps>(
     const isCenter = centerCols.includes(col)
     const isExcluded = config.excludedSeats.some((s) => s.row === row && s.col === col)
 
-    const items: { label: string; action?: () => void; hint?: HighlightHint; info?: boolean }[] = [
-      isExcluded ? {
-        label: '제외 해제',
-        action: () => { onToggleExcludedSeat(row, col); onClose() },
-      } : null,
+    type Item = { label: string; action: () => void; hint?: HighlightHint; danger?: boolean }
+    type Divider = { divider: true }
+    type InfoItem = { info: true; label: string }
+    type Row = Item | Divider | InfoItem
+
+    const removeItems: Item[] = [
       ...primeMatches.map(({ r, i }) => ({
         label: '명당 범위 해제',
         hint: { type: 'prime' as const, range: r },
         action: () => { onRemovePrimeRange(i); onClose() },
+        danger: true,
       })),
-      isWatched ? {
-        label: '실관람 해제',
-        hint: { type: 'watched' as const, row, col },
-        action: () => { onToggleWatchedSeat(row, col); onClose() },
-      } : null,
-      isSightRow ? {
-        label: '시선일치행 해제',
-        hint: { type: 'sightRow' as const, row },
-        action: () => { onToggleSightRow(row); onClose() },
-      } : null,
-      isCenter ? { label: '중앙열 (자동 계산)', info: true } : null,
-    ].filter(Boolean) as { label: string; action?: () => void; hint?: HighlightHint; info?: boolean }[]
+      isWatched ? { label: '실관람 해제', hint: { type: 'watched' as const, row, col }, action: () => { onToggleWatchedSeat(row, col); onClose() }, danger: true } : null,
+      isSightRow ? { label: '시선일치행 해제', hint: { type: 'sightRow' as const, row }, action: () => { onToggleSightRow(row); onClose() }, danger: true } : null,
+    ].filter(Boolean) as Item[]
+
+    const setItems: Row[] = [
+      { label: isSightRow ? '시선일치행 해제' : '시선일치행 설정', action: () => { onToggleSightRow(row); onClose() } },
+      { label: '명당 범위 설정', action: () => { onClose(); onEnterModeFrom('prime', { row, col }) } },
+      { label: '실관람 설정', action: () => { onClose(); onEnterModeFrom('watched', { row, col }) } },
+      { label: isExcluded ? '제외 해제' : '제외 영역 설정', action: () => { if (isExcluded) { onToggleExcludedSeat(row, col); onClose() } else { onClose(); onEnterModeFrom('excluded', { row, col }) } } },
+      isCenter ? { info: true, label: '중앙열 (자동 계산)' } : null,
+    ].filter(Boolean) as Row[]
+
+    const rows: Row[] = [
+      ...setItems,
+      ...(removeItems.length > 0 ? [{ divider: true } as Divider, ...removeItems] : []),
+    ]
 
     return (
       <div
@@ -645,24 +685,28 @@ const SeatPopup = forwardRef<HTMLDivElement, SeatPopupProps>(
         className="bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-40 text-sm"
         onMouseLeave={() => onHoverHint(null)}
       >
-        <div className="px-3 py-1 text-xs text-gray-400 border-b border-gray-100 mb-1">
+        <div className="px-3 py-1.5 text-xs font-medium text-gray-500 border-b border-gray-100">
           {indexToLabel(row - 1)}{col}
         </div>
-        {items.map((item, i) =>
-          item.info ? (
-            <div key={i} className="px-3 py-1.5 text-xs text-gray-400">{item.label}</div>
-          ) : (
+        {rows.map((item, i) => {
+          if ('divider' in item) return <div key={i} className="my-1 border-t border-gray-100" />
+          if ('info' in item) return <div key={i} className="px-3 py-1.5 text-xs text-gray-400">{item.label}</div>
+          return (
             <button
               key={i}
               type="button"
               onClick={item.action}
               onMouseEnter={() => item.hint && onHoverHint(item.hint)}
-              className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors"
+              className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
+                item.danger
+                  ? 'text-red-600 hover:bg-red-50'
+                  : 'text-gray-700 hover:bg-gray-50'
+              }`}
             >
               {item.label}
             </button>
           )
-        )}
+        })}
       </div>
     )
   }

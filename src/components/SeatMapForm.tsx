@@ -118,37 +118,32 @@ export default function SeatMapForm({
 
       <hr className="my-4 border-gray-200" />
 
-      {/* 가로 복도 */}
+      {/* 복도 */}
       <Section
-        label="가로 복도 (행 기준)"
-        button={<EditModeButton label="편집" color="indigo" mode="rowAisle" active={editMode === 'rowAisle'} {...btnProps} />}
-        resetIcon={config.rowAisles.length > 0 ? <ResetIcon onClick={() => update({ rowAisles: [] })} title="가로 복도 초기화" /> : undefined}
+        label="복도"
+        button={<EditModeButton label="편집" color="indigo" mode="aisle" active={editMode === 'aisle'} {...btnProps} />}
+        resetIcon={<ResetIcon onClick={() => update({ rowAisles: [], colAisles: [] })} title="복도 초기화" disabled={config.rowAisles.length === 0 && config.colAisles.length === 0} />}
       >
-        <TagList
-          items={config.rowAisles.map((v) => ({ key: v, label: `${indexToLabel(v - 1)}행 후` }))}
-          color="indigo"
-          onRemove={(v) => update({ rowAisles: config.rowAisles.filter((x) => x !== v) })}
-        />
-      </Section>
-
-      {/* 세로 복도 */}
-      <Section
-        label="세로 복도 (열 기준)"
-        button={<EditModeButton label="편집" color="indigo" mode="colAisle" active={editMode === 'colAisle'} {...btnProps} />}
-        resetIcon={config.colAisles.length > 0 ? <ResetIcon onClick={() => update({ colAisles: [] })} title="세로 복도 초기화" /> : undefined}
-      >
-        <TagList
-          items={config.colAisles.map((v) => ({ key: v, label: `${v}열 후` }))}
-          color="indigo"
-          onRemove={(v) => update({ colAisles: config.colAisles.filter((x) => x !== v) })}
-        />
+        <div className="flex flex-wrap gap-1">
+          {config.rowAisles.map((v) => (
+            <span key={`r${v}`} className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-800 text-xs rounded">
+              {indexToLabel(v - 1)}행↓
+              <button type="button" onClick={() => update({ rowAisles: config.rowAisles.filter((x) => x !== v) })} className="hover:text-red-600">×</button>
+            </span>
+          ))}
+          {config.colAisles.map((v) => (
+            <span key={`c${v}`} className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-800 text-xs rounded">
+              {v}열→
+              <button type="button" onClick={() => update({ colAisles: config.colAisles.filter((x) => x !== v) })} className="hover:text-red-600">×</button>
+            </span>
+          ))}
+        </div>
       </Section>
 
       {/* 제외 영역 */}
       <Section
         label="제외 영역"
-        button={<EditModeButton label="편집" color="indigo" mode="excluded" active={editMode === 'excluded'} {...btnProps} />}
-        resetIcon={config.excludedSeats.length > 0 ? <ResetIcon onClick={() => update({ excludedSeats: [] })} title="제외 영역 초기화" /> : undefined}
+        resetIcon={<ResetIcon onClick={() => update({ excludedSeats: [] })} title="제외 영역 초기화" disabled={config.excludedSeats.length === 0} />}
       >
         {config.excludedSeats.length > 0 && (
           <p className="text-xs text-gray-400">{config.excludedSeats.length}개 좌석 제외됨</p>
@@ -157,25 +152,10 @@ export default function SeatMapForm({
 
       <hr className="my-4 border-gray-200" />
 
-      {/* 제외 영역 */}
-      <Section
-        label="제외 영역"
-        button={<EditModeButton label="선택" color="gray" mode="excluded" active={editMode === 'excluded'} {...btnProps} />}
-        resetIcon={config.excludedSeats.length > 0 ? <ResetIcon onClick={() => update({ excludedSeats: [] })} title="제외 영역 초기화" /> : undefined}
-      >
-        {config.excludedSeats.length > 0
-          ? <p className="text-xs text-gray-400">{config.excludedSeats.length}개 좌석 제외됨</p>
-          : null}
-      </Section>
-
-      <hr className="my-4 border-gray-200" />
-      <p className="text-xs text-gray-500 mb-3">색칠 레이어</p>
-
       {/* 시선일치행 */}
       <Section
         label={<><Dot color="bg-green-300" />시선일치행</>}
-        button={<EditModeButton label="선택" color="green" mode="sightRow" active={editMode === 'sightRow'} {...btnProps} />}
-        resetIcon={config.sightRows.length > 0 ? <ResetIcon onClick={() => update({ sightRows: [] })} title="시선일치행 초기화" /> : undefined}
+        resetIcon={<ResetIcon onClick={() => update({ sightRows: [] })} title="시선일치행 초기화" disabled={config.sightRows.length === 0} />}
       >
         <TagList
           items={config.sightRows.map((v) => ({ key: v, label: `${indexToLabel(v - 1)}행` }))}
@@ -187,8 +167,7 @@ export default function SeatMapForm({
       {/* 명당 */}
       <Section
         label={<><Dot color="bg-red-300" />명당 범위</>}
-        button={<EditModeButton label="선택" color="red" mode="prime" active={editMode === 'prime'} {...btnProps} />}
-        resetIcon={config.primeRanges.length > 0 ? <ResetIcon onClick={() => update({ primeRanges: [] })} title="명당 범위 초기화" /> : undefined}
+        resetIcon={<ResetIcon onClick={() => update({ primeRanges: [] })} title="명당 범위 초기화" disabled={config.primeRanges.length === 0} />}
       >
         <div className="flex flex-col gap-1">
           {config.primeRanges.map((r, i) => (
@@ -203,8 +182,7 @@ export default function SeatMapForm({
       {/* 실관람 */}
       <Section
         label={<><Dot color="bg-yellow-300" />실관람 좌석</>}
-        button={<EditModeButton label="선택" color="yellow" mode="watched" active={editMode === 'watched'} {...btnProps} />}
-        resetIcon={config.watchedSeats.length > 0 ? <ResetIcon onClick={() => update({ watchedSeats: [] })} title="실관람 초기화" /> : undefined}
+        resetIcon={<ResetIcon onClick={() => update({ watchedSeats: [] })} title="실관람 초기화" disabled={config.watchedSeats.length === 0} />}
       >
         <TagList
           items={[...config.watchedSeats]
@@ -361,28 +339,31 @@ function Dot({ color }: { color: string }) {
   return <span className={`inline-block w-2.5 h-2.5 rounded ${color} mr-1`} />
 }
 
-function Section({ label, button, resetIcon, children }: { label: React.ReactNode; button: React.ReactNode; resetIcon?: React.ReactNode; children: React.ReactNode }) {
+function Section({ label, button, resetIcon, children }: { label: React.ReactNode; button?: React.ReactNode; resetIcon?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="mb-4">
       <div className="flex items-center justify-between mb-2">
-        <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
+        <label className="text-sm font-medium text-gray-700 flex items-center">
           {label}
-          {resetIcon}
         </label>
-        {button}
+        <div className="flex items-center gap-1">
+          {resetIcon}
+          {button}
+        </div>
       </div>
       {children}
     </div>
   )
 }
 
-function ResetIcon({ onClick, title }: { onClick: () => void; title: string }) {
+function ResetIcon({ onClick, title, disabled }: { onClick: () => void; title: string; disabled?: boolean }) {
   return (
     <button
       type="button"
       onClick={onClick}
       title={title}
-      className="text-gray-300 hover:text-gray-500 transition-colors text-base leading-none"
+      disabled={disabled}
+      className="text-base leading-none transition-colors disabled:opacity-20 disabled:cursor-not-allowed text-gray-400 hover:text-gray-600 disabled:hover:text-gray-400"
     >
       ↺
     </button>
