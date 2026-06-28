@@ -1,79 +1,669 @@
-import type { SeatMapConfig } from '../types'
+import { useState, useRef, useEffect, forwardRef } from 'react'
+import type { SeatMapConfig, Range } from '../types'
+import type { EditMode } from '../App'
+import { calcCenterCols } from '../utils/centerCols'
+import { indexToLabel } from '../utils/rowLabel'
+
+const GHOST_MAX_ROWS = 26
+const GHOST_MAX_COLS = 36
+const GHOST_CELL = 18
 
 interface Props {
   config: SeatMapConfig
+  editMode: EditMode
+  onCancelEditMode: () => void
+  onCompleteEditMode: () => void
+  onSetGridSize: (rows: number, cols: number) => void
+  onAddPrimeRange: (range: Range) => void
+  onRemovePrimeRange: (index: number) => void
+  onToggleWatchedSeat: (row: number, col: number) => void
+  onToggleSightRow: (row: number) => void
+  onToggleRowAisle: (row: number) => void
+  onToggleColAisle: (col: number) => void
+  onToggleExcludedSeat: (row: number, col: number) => void
+  onAddExcludedRange: (range: Range) => void
+  onExcludeSeats: (seats: { row: number; col: number }[]) => void
 }
 
-function rowLabel(rowIndex: number): string {
-  // 0-based index → A, B, C, ..., Z, AA, AB, ...
-  let label = ''
-  let n = rowIndex
-  do {
-    label = String.fromCharCode(65 + (n % 26)) + label
-    n = Math.floor(n / 26) - 1
-  } while (n >= 0)
-  return label
+interface SeatPos { row: number; col: number }
+interface PopupState { x: number; y: number; row: number; col: number }
+
+type HighlightHint =
+  | { type: 'prime'; range: Range }
+  | { type: 'watched'; row: number; col: number }
+  | { type: 'sightRow'; row: number }
+  | null
+
+function normalizeRange(a: SeatPos, b: SeatPos): Range {
+  return {
+    rowStart: Math.min(a.row, b.row),
+    rowEnd: Math.max(a.row, b.row),
+    colStart: Math.min(a.col, b.col),
+    colEnd: Math.max(a.col, b.col),
+  }
 }
 
-export default function SeatMapPreview({ config }: Props) {
+function inRange(row: number, col: number, r: Range) {
+  return row >= r.rowStart && row <= r.rowEnd && col >= r.colStart && col <= r.colEnd
+}
+
+// 우선순위: watched > prime > sightRow > center
+type Layer = 'watched' | 'prime' | 'sightRow' | 'center'
+const LAYER_BG: Record<Layer, string> = {
+  watched:  'bg-yellow-300',
+  prime:    'bg-red-300',
+  sightRow: 'bg-green-300',
+  center:   'bg-blue-300',
+}
+const LAYER_RING: Record<Layer, string> = {
+  watched:  'ring-yellow-400',
+  prime:    'ring-red-400',
+  sightRow: 'ring-green-400',
+  center:   'ring-blue-400',
+}
+
+function getAppliedLayers(
+  row: number, col: number,
+  config: SeatMapConfig,
+  centerCols: number[]
+): Layer[] {
+  const layers: Layer[] = []
+  if (config.watchedSeats.some((s) => s.row === row && s.col === col)) layers.push('watched')
+  if (config.primeRanges.some((r) => inRange(row, col, r))) layers.push('prime')
+  if (config.sightRows.includes(row)) layers.push('sightRow')
+  if (centerCols.includes(col)) layers.push('center')
+  return layers
+}
+
+const MODE_STATUS: Record<NonNullable<EditMode>, (arg: boolean | number) => string> = {
+  gridSize: () => '마우스를 움직여 크기 지정 후 클릭',
+  excluded: (n) => (n as number) > 0
+    ? `꼭짓점 ${n}개 선택됨 — 계속 클릭하거나 바깥 클릭으로 확정`
+    : '제외할 영역의 꼭짓점을 순서대로 클릭하세요',
+  prime:    (f) => f ? '두 번째 좌석 클릭 또는 드래그해 범위 확정' : '시작 좌석 클릭 또는 드래그 시작',
+  watched:  () => '좌석 클릭으로 실관람 토글',
+  sightRow: () => '행 클릭으로 시선일치행 토글',
+  rowAisle: () => '행 클릭으로 가로 복도 토글',
+  colAisle: () => '열 클릭으로 세로 복도 토글',
+}
+
+const MODE_RING: Record<NonNullable<EditMode>, string> = {
+  gridSize: 'ring-indigo-400 bg-indigo-50',
+  excluded: 'ring-gray-400 bg-gray-50',
+  prime:    'ring-red-400 bg-red-50',
+  watched:  'ring-yellow-400 bg-yellow-50',
+  sightRow: 'ring-green-400 bg-green-50',
+  rowAisle: 'ring-indigo-400 bg-indigo-50',
+  colAisle: 'ring-indigo-400 bg-indigo-50',
+}
+
+// 폴리곤 내부 판정 (ray casting)
+function pointInPolygon(row: number, col: number, vertices: SeatPos[]): boolean {
+  const n = vertices.length
+  if (n < 3) return false
+  let inside = false
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = vertices[i].col, yi = vertices[i].row
+    const xj = vertices[j].col, yj = vertices[j].row
+    if (((yi > row) !== (yj > row)) && col < ((xj - xi) * (row - yi)) / (yj - yi) + xi) {
+      inside = !inside
+    }
+  }
+  return inside
+}
+
+// 점이 선분에 가까운지 판정 (threshold 단위: grid 좌표)
+function pointNearSegment(
+  px: number, py: number,
+  ax: number, ay: number,
+  bx: number, by: number,
+  threshold = 0.6
+): boolean {
+  const dx = bx - ax, dy = by - ay
+  const lenSq = dx * dx + dy * dy
+  if (lenSq === 0) return Math.hypot(px - ax, py - ay) < threshold
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq))
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy)) < threshold
+}
+
+// 내부 또는 경계선에 걸친 좌석 판정
+function pointInOrOnPolygon(row: number, col: number, vertices: SeatPos[]): boolean {
+  if (pointInPolygon(row, col, vertices)) return true
+  const n = vertices.length
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    if (pointNearSegment(col, row, vertices[i].col, vertices[i].row, vertices[j].col, vertices[j].row)) return true
+  }
+  return false
+}
+
+export default function SeatMapPreview({
+  config, editMode,
+  onCancelEditMode, onCompleteEditMode, onSetGridSize,
+  onToggleExcludedSeat, onAddExcludedRange, onExcludeSeats,
+  onAddPrimeRange, onRemovePrimeRange,
+  onToggleWatchedSeat, onToggleSightRow,
+  onToggleRowAisle, onToggleColAisle,
+}: Props) {
   const { rows, cols, rowAisles, colAisles } = config
+  const SEAT = 32
+  const AISLE = 12
+  const AISLE_PREVIEW = 10
 
-  const SEAT_SIZE = 32
-  const AISLE_SIZE = 12
-
-  // 각 행/열에 대해 "이 위치 다음에 복도가 있나" 세트
   const rowAisleSet = new Set(rowAisles)
   const colAisleSet = new Set(colAisles)
+  const centerCols = calcCenterCols(cols, colAisles)
+
+  const [firstClick, setFirstClick] = useState<SeatPos | null>(null)
+  const [dragStart, setDragStart] = useState<SeatPos | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const [hoverPos, setHoverPos] = useState<SeatPos | null>(null)
+  const [popup, setPopup] = useState<PopupState | null>(null)
+  const [highlightHint, setHighlightHint] = useState<HighlightHint>(null)
+
+  // 폴리곤 제외 모드
+  const [polyVertices, setPolyVertices] = useState<SeatPos[]>([])
+  const prevEditModeRef = useRef<EditMode>(null)
+
+  const popupRef = useRef<HTMLDivElement>(null)
+  const dragHandledRef = useRef(false)
+  const suppressNextClickRef = useRef(false)
+
+  // 좌석 픽셀 중심 계산 (SVG 오버레이용)
+  // 열: flex container에 gap:2가 있어서 gap div 양쪽에 2px씩 추가됨
+  //   = seat(32) + flex_gap(2) + gap_div(2) + flex_gap(2) = 38px per col
+  //   aisle의 경우 gap_div가 12px → extra 10px
+  // 행: 외부 div는 gap 없음
+  //   = seat(32) + gap_div(2) = 34px per row
+  function seatPixelCenter(row: number, col: number): { x: number; y: number } {
+    const COL_STEP = SEAT + 2 + 2 + 2   // 38
+    const ROW_STEP = SEAT + 2            // 34
+    const AISLE_EXTRA = AISLE - 2        // 10
+
+    let x = (col - 1) * COL_STEP + SEAT / 2
+    for (let c = 1; c < col; c++) {
+      if (colAisleSet.has(c)) x += AISLE_EXTRA
+    }
+
+    let y = (row - 1) * ROW_STEP + SEAT / 2
+    for (let r = 1; r < row; r++) {
+      if (rowAisleSet.has(r)) y += AISLE_EXTRA
+    }
+
+    return { x, y }
+  }
+
+  // 전체 그리드 픽셀 크기 계산
+  const gridPixelWidth = (() => {
+    let w = cols * (SEAT + 2) - 2
+    colAisles.forEach(() => { w += AISLE - 2 })
+    return w
+  })()
+  const gridPixelHeight = (() => {
+    let h = rows * (SEAT + 2) - 2
+    rowAisles.forEach(() => { h += AISLE - 2 })
+    return h
+  })()
+
+  // 폴리곤 확정: excluded 모드에서 editMode가 null이 될 때
+  useEffect(() => {
+    if (prevEditModeRef.current === 'excluded' && editMode !== 'excluded') {
+      if (polyVertices.length >= 3) {
+        const seats: { row: number; col: number }[] = []
+        for (let r = 1; r <= rows; r++) {
+          for (let c = 1; c <= cols; c++) {
+            if (pointInOrOnPolygon(r, c, polyVertices)) seats.push({ row: r, col: c })
+          }
+        }
+        if (seats.length > 0) onExcludeSeats(seats)
+      }
+      setPolyVertices([])
+    }
+    prevEditModeRef.current = editMode
+  }, [editMode])
+
+  // 폴리곤 미리보기: 현재 꼭짓점 + hover 위치로 계산
+  const polyPreviewVertices = hoverPos && polyVertices.length > 0
+    ? [...polyVertices, hoverPos]
+    : polyVertices
+
+  useEffect(() => {
+    if (!popup) return
+    function handler(e: MouseEvent) {
+      if (popupRef.current && !popupRef.current.contains(e.target as Node)) setPopup(null)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [popup])
+
+  useEffect(() => {
+    if (!editMode) { setFirstClick(null); setDragStart(null); setIsDragging(false) }
+  }, [editMode])
+
+  const isRangeMode = editMode === 'prime'
+
+  const previewRange: Range | null = (() => {
+    if (!isRangeMode || !hoverPos) return null
+    if (isDragging && dragStart) return normalizeRange(dragStart, hoverPos)
+    if (firstClick) return normalizeRange(firstClick, hoverPos)
+    return null
+  })()
+
+  function isHighlighted(row: number, col: number): boolean {
+    if (!highlightHint) return false
+    if (highlightHint.type === 'prime') return inRange(row, col, highlightHint.range)
+    if (highlightHint.type === 'watched') return highlightHint.row === row && highlightHint.col === col
+    if (highlightHint.type === 'sightRow') return highlightHint.row === row
+    return false
+  }
+
+  function getSeatAppearance(row: number, col: number): { bg: string; ring: string | null; highlight: boolean; excluded: boolean } {
+    const highlight = isHighlighted(row, col)
+    const isExcluded = config.excludedSeats.some((s) => s.row === row && s.col === col)
+
+    // excluded 폴리곤 미리보기
+    if (editMode === 'excluded') {
+      const isFirstVertex = polyVertices[0]?.row === row && polyVertices[0]?.col === col
+      const isVertex = polyVertices.some((v) => v.row === row && v.col === col)
+      if (isFirstVertex && polyVertices.length >= 3)
+        return { bg: 'bg-red-400', ring: 'ring-2 ring-red-600', highlight, excluded: false }
+      if (isVertex) return { bg: 'bg-gray-500', ring: null, highlight, excluded: false }
+      if (polyPreviewVertices.length >= 3 && pointInOrOnPolygon(row, col, polyPreviewVertices)) {
+        return { bg: 'bg-gray-300', ring: null, highlight, excluded: false }
+      }
+    }
+
+    // excluded seats always shown as excluded
+    if (isExcluded) return { bg: 'bg-white', ring: 'ring-1 ring-gray-300', highlight, excluded: true }
+
+    // prime preview
+    if (editMode === 'prime') {
+      const isFirst = firstClick?.row === row && firstClick?.col === col
+      const isDragOrigin = isDragging && dragStart?.row === row && dragStart?.col === col
+      if (isFirst || isDragOrigin) return { bg: 'bg-red-400', ring: null, highlight, excluded: false }
+      if (previewRange && inRange(row, col, previewRange)) return { bg: 'bg-red-200', ring: null, highlight, excluded: false }
+    }
+    if (editMode === 'sightRow' && hoverPos?.row === row) {
+      return { bg: 'bg-green-200', ring: null, highlight, excluded: false }
+    }
+
+    // stored data layers
+    const layers = getAppliedLayers(row, col, config, centerCols)
+    if (layers.length === 0) return { bg: 'bg-gray-200', ring: null, highlight, excluded: false }
+    const bg = LAYER_BG[layers[0]]
+    const ring = layers.length > 1 ? LAYER_RING[layers[1]] : null
+    return { bg, ring, highlight, excluded: false }
+  }
+
+  function handleRangeMouseDown(pos: SeatPos) {
+    setDragStart(pos)
+    setIsDragging(false)
+  }
+
+  function handleRangeMouseEnter(pos: SeatPos) {
+    if (dragStart && (dragStart.row !== pos.row || dragStart.col !== pos.col)) setIsDragging(true)
+  }
+
+  function handleRangeMouseUp(pos: SeatPos) {
+    if (isDragging && dragStart) {
+      dragHandledRef.current = true
+      const range = normalizeRange(dragStart, pos)
+      if (editMode === 'prime') onAddPrimeRange(range)
+      else if (editMode === 'excluded') onAddExcludedRange(range)
+      setDragStart(null); setIsDragging(false)
+      onCompleteEditMode(); return
+    }
+    setDragStart(null)
+    if (!firstClick) {
+      setFirstClick(pos)
+    } else {
+      suppressNextClickRef.current = true
+      const range = normalizeRange(firstClick, pos)
+      if (editMode === 'prime') onAddPrimeRange(range)
+      else if (editMode === 'excluded') onAddExcludedRange(range)
+      setFirstClick(null)
+      onCompleteEditMode()
+    }
+  }
+
+  function handleSeatClick(row: number, col: number, e: React.MouseEvent) {
+    if (suppressNextClickRef.current) { suppressNextClickRef.current = false; return }
+    if (editMode === 'watched') { onToggleWatchedSeat(row, col); return }
+    if (editMode === 'sightRow') { onToggleSightRow(row); return }
+    if (editMode === 'excluded') {
+      const first = polyVertices[0]
+      if (polyVertices.length >= 3 && first && first.row === row && first.col === col) {
+        onCompleteEditMode()  // useEffect가 polyVertices로 채움
+        return
+      }
+      setPolyVertices((v) => [...v, { row, col }])
+      return
+    }
+    if (editMode === 'rowAisle') { if (row < rows) onToggleRowAisle(row); return }
+    if (editMode === 'colAisle') { if (col < cols) onToggleColAisle(col); return }
+    // normal mode: popup
+    const isExcluded = config.excludedSeats.some((s) => s.row === row && s.col === col)
+    const layers = getAppliedLayers(row, col, config, centerCols)
+    if (layers.length > 0 || isExcluded) setPopup({ x: e.clientX, y: e.clientY, row, col })
+  }
+
+  const modeInfo = editMode
+    ? editMode === 'excluded'
+      ? MODE_STATUS['excluded'](polyVertices.length)
+      : MODE_STATUS[editMode](!!firstClick)
+    : null
+  const ringClass = editMode ? MODE_RING[editMode] : ''
 
   return (
-    <div>
-      <p className="text-sm text-gray-500 mb-4">
-        {rows}행 × {cols}열
-      </p>
-      <div className="overflow-auto">
-        <div
-          style={{ display: 'inline-grid' }}
-        >
-          {Array.from({ length: rows }, (_, ri) => (
-            <>
-              <div
-                key={`row-${ri}`}
-                style={{
-                  display: 'flex',
-                  gap: 2,
-                }}
-              >
-                {Array.from({ length: cols }, (_, ci) => (
-                  <>
-                    <div
-                      key={`seat-${ri}-${ci}`}
-                      style={{
-                        width: SEAT_SIZE,
-                        height: SEAT_SIZE,
-                        flexShrink: 0,
-                      }}
-                      className="bg-gray-200 rounded flex items-center justify-center text-gray-600"
-                    >
-                      <span style={{ fontSize: 9, lineHeight: 1 }}>
-                        {rowLabel(ri)}{ci + 1}
-                      </span>
-                    </div>
-                    {colAisleSet.has(ci + 1) && (
-                      <div
-                        key={`col-aisle-${ri}-${ci}`}
-                        style={{ width: AISLE_SIZE, flexShrink: 0 }}
-                      />
-                    )}
-                  </>
-                ))}
+    <div className="relative">
+      {/* 제목 */}
+      {(config.brand || config.branch || config.screen) && (
+        <h2 className="text-xl font-bold text-gray-800 mb-4">
+          {[config.brand, config.branch, config.screen].filter(Boolean).join(' ')}
+        </h2>
+      )}
+
+      {/* 범례 */}
+      <div className="flex gap-4 mb-4 text-xs text-gray-700">
+        {[
+          { color: 'bg-blue-300', label: '중앙열' },
+          { color: 'bg-green-300', label: '시선일치행' },
+          { color: 'bg-red-300', label: '명당' },
+          { color: 'bg-yellow-300', label: '실관람' },
+        ].map(({ color, label }) => (
+          <span key={label} className="flex items-center gap-1">
+            <span className={`inline-block w-3 h-3 rounded ${color}`} />{label}
+          </span>
+        ))}
+      </div>
+
+      {/* Ghost 그리드 (gridSize 편집 모드) */}
+      {editMode === 'gridSize' && (
+        <GhostGrid
+          currentRows={config.rows}
+          currentCols={config.cols}
+          hoverPos={hoverPos}
+          onHover={(pos) => setHoverPos(pos)}
+          onConfirm={(rows, cols) => onSetGridSize(rows, cols)}
+          onLeave={() => setHoverPos(null)}
+        />
+      )}
+
+      {/* 그리드 */}
+      {editMode !== 'gridSize' && <div
+        className={`inline-block relative rounded-lg transition-all duration-150 ${editMode ? `ring-2 ring-offset-4 p-3 ${ringClass}` : ''}`}
+        onClick={(e) => e.stopPropagation()}
+        onMouseLeave={() => { setHoverPos(null); if (isRangeMode) { setDragStart(null); setIsDragging(false) } }}
+        onMouseUp={() => {
+          if (dragHandledRef.current) { dragHandledRef.current = false; return }
+          if (isRangeMode && isDragging && dragStart && hoverPos) {
+            const range = normalizeRange(dragStart, hoverPos)
+            if (editMode === 'prime') onAddPrimeRange(range)
+            else if (editMode === 'excluded') onAddExcludedRange(range)
+            setDragStart(null); setIsDragging(false); onCompleteEditMode()
+          }
+        }}
+      >
+        <div style={{ display: 'inline-block', userSelect: 'none', position: 'relative' }}>
+          {/* 폴리곤 SVG 오버레이 — inner div 기준으로 절대 위치 */}
+          {editMode === 'excluded' && polyPreviewVertices.length >= 2 && (
+            <svg
+              style={{
+                position: 'absolute', top: 0, left: 0,
+                width: gridPixelWidth, height: gridPixelHeight,
+                pointerEvents: 'none', overflow: 'visible', zIndex: 10,
+              }}
+            >
+              <polygon
+                points={polyPreviewVertices.map((v) => {
+                  const { x, y } = seatPixelCenter(v.row, v.col)
+                  return `${x},${y}`
+                }).join(' ')}
+                fill="rgba(107,114,128,0.15)"
+                stroke="#6b7280"
+                strokeWidth={1.5}
+                strokeDasharray="4 2"
+              />
+              {polyVertices.map((v, i) => {
+                const { x, y } = seatPixelCenter(v.row, v.col)
+                const isFirst = i === 0
+                return (
+                  <circle
+                    key={i} cx={x} cy={y}
+                    r={isFirst ? 6 : 4}
+                    fill={isFirst ? '#ef4444' : '#374151'}
+                    stroke="white" strokeWidth={1.5}
+                  />
+                )
+              })}
+            </svg>
+          )}
+          {Array.from({ length: rows }, (_, ri) => {
+            const row = ri + 1
+            const isAisleRow = rowAisleSet.has(row)
+            const showRowAislePreview = editMode === 'rowAisle' && hoverPos?.row === row && row < rows
+
+            return (
+              <div key={`row-${ri}`}>
+                <div style={{ display: 'flex', gap: 2 }}>
+                  {Array.from({ length: cols }, (_, ci) => {
+                    const col = ci + 1
+                    const isAisleCol = colAisleSet.has(col)
+                    const showColAislePreview = editMode === 'colAisle' && hoverPos?.col === col && col < cols
+                    const { bg, ring, highlight, excluded } = getSeatAppearance(row, col)
+                    const inEditMode = editMode !== null
+
+                    return (
+                      <>
+                        <div
+                          key={`seat-${ri}-${ci}`}
+                          style={{ width: SEAT, height: SEAT, flexShrink: 0 }}
+                          className={[
+                            bg, 'rounded flex items-center justify-center transition-colors cursor-pointer',
+                            excluded ? 'text-gray-300' : 'text-gray-700',
+                            inEditMode ? 'hover:brightness-90' : '',
+                            highlight ? 'ring-2 ring-offset-0 ring-gray-700 brightness-75'
+                              : ring ? `ring-2 ring-offset-0 ${ring}` : '',
+                          ].filter(Boolean).join(' ')}
+                          onMouseDown={() => { if (isRangeMode) handleRangeMouseDown({ row, col }) }}
+                          onMouseEnter={() => { setHoverPos({ row, col }); if (isRangeMode) handleRangeMouseEnter({ row, col }) }}
+                          onMouseUp={() => { if (isRangeMode) handleRangeMouseUp({ row, col }) }}
+                          onClick={(e) => { if (!isRangeMode) handleSeatClick(row, col, e) }}
+                        >
+                          {excluded
+                            ? <span style={{ fontSize: 11, lineHeight: 1 }}>╳</span>
+                            : <span style={{ fontSize: 9, lineHeight: 1 }}>{indexToLabel(ri)}{col}</span>
+                          }
+                        </div>
+
+                        {col < cols && (
+                          <div
+                            key={`ca-${ri}-${ci}`}
+                            style={{
+                              width: isAisleCol ? AISLE : showColAislePreview ? AISLE_PREVIEW : 2,
+                              flexShrink: 0
+                            }}
+                            className={[
+                              'transition-all',
+                              showColAislePreview && !isAisleCol ? 'bg-indigo-300 rounded cursor-pointer' : '',
+                              isAisleCol && editMode === 'colAisle' ? 'bg-indigo-100 rounded cursor-pointer' : '',
+                            ].filter(Boolean).join(' ')}
+                            onMouseEnter={() => setHoverPos({ row, col })}
+                            onClick={() => editMode === 'colAisle' && onToggleColAisle(col)}
+                          />
+                        )}
+                      </>
+                    )
+                  })}
+                </div>
+
+                {row < rows && (
+                  <div
+                    key={`ra-${ri}`}
+                    style={{ height: isAisleRow ? AISLE : showRowAislePreview ? AISLE_PREVIEW : 2 }}
+                    className={[
+                      'transition-all',
+                      showRowAislePreview && !isAisleRow ? 'bg-indigo-300 rounded cursor-pointer' : '',
+                      isAisleRow && editMode === 'rowAisle' ? 'bg-indigo-100 rounded cursor-pointer' : '',
+                    ].filter(Boolean).join(' ')}
+                    onMouseEnter={() => setHoverPos({ row, col: hoverPos?.col ?? 1 })}
+                    onClick={() => editMode === 'rowAisle' && onToggleRowAisle(row)}
+                  />
+                )}
               </div>
-              {rowAisleSet.has(ri + 1) && (
-                <div key={`row-aisle-${ri}`} style={{ height: AISLE_SIZE }} />
-              )}
-            </>
-          ))}
+            )
+          })}
         </div>
+      </div>
+
+      }
+
+      {/* 팝업 */}
+      {popup && (
+        <SeatPopup
+          ref={popupRef}
+          popup={popup}
+          config={config}
+          centerCols={centerCols}
+          onRemovePrimeRange={onRemovePrimeRange}
+          onToggleWatchedSeat={onToggleWatchedSeat}
+          onToggleSightRow={onToggleSightRow}
+          onToggleExcludedSeat={onToggleExcludedSeat}
+          onHoverHint={setHighlightHint}
+          onClose={() => { setPopup(null); setHighlightHint(null) }}
+        />
+      )}
+    </div>
+  )
+}
+
+// --- Ghost Grid (그리드 크기 선택) ---
+function GhostGrid({
+  currentRows,
+  currentCols,
+  hoverPos,
+  onHover,
+  onConfirm,
+  onLeave,
+}: {
+  currentRows: number
+  currentCols: number
+  hoverPos: SeatPos | null
+  onHover: (pos: SeatPos) => void
+  onConfirm: (rows: number, cols: number) => void
+  onLeave: () => void
+}) {
+  const hoverRow = hoverPos?.row ?? currentRows
+  const hoverCol = hoverPos?.col ?? currentCols
+
+  return (
+    <div onMouseLeave={onLeave}>
+      <div className="text-sm font-medium text-indigo-700 mb-2">
+        {hoverRow}행 × {hoverCol}열
+      </div>
+      <div style={{ display: 'inline-block', userSelect: 'none' }}>
+        {Array.from({ length: GHOST_MAX_ROWS }, (_, ri) => (
+          <div key={ri} style={{ display: 'flex', gap: 1, marginBottom: 1 }}>
+            {Array.from({ length: GHOST_MAX_COLS }, (_, ci) => {
+              const row = ri + 1
+              const col = ci + 1
+              const inSelected = row <= hoverRow && col <= hoverCol
+              const isBorder = row === hoverRow || col === hoverCol
+              return (
+                <div
+                  key={ci}
+                  style={{ width: GHOST_CELL, height: GHOST_CELL, flexShrink: 0 }}
+                  className={[
+                    'rounded-sm cursor-pointer transition-colors',
+                    inSelected
+                      ? isBorder ? 'bg-indigo-400' : 'bg-indigo-200'
+                      : 'bg-gray-100 hover:bg-gray-200',
+                  ].join(' ')}
+                  onMouseEnter={() => onHover({ row, col })}
+                  onClick={() => onConfirm(row, col)}
+                />
+              )
+            })}
+          </div>
+        ))}
       </div>
     </div>
   )
 }
+
+// --- Popup ---
+interface SeatPopupProps {
+  popup: PopupState
+  config: SeatMapConfig
+  centerCols: number[]
+  onRemovePrimeRange: (i: number) => void
+  onToggleWatchedSeat: (row: number, col: number) => void
+  onToggleSightRow: (row: number) => void
+  onToggleExcludedSeat: (row: number, col: number) => void
+  onHoverHint: (hint: HighlightHint) => void
+  onClose: () => void
+}
+
+const SeatPopup = forwardRef<HTMLDivElement, SeatPopupProps>(
+  ({ popup, config, centerCols, onRemovePrimeRange, onToggleWatchedSeat, onToggleSightRow, onToggleExcludedSeat, onHoverHint, onClose }, ref) => {
+    const { row, col, x, y } = popup
+
+    const primeMatches = config.primeRanges
+      .map((r, i) => inRange(row, col, r) ? { r, i } : null)
+      .filter(Boolean) as { r: Range; i: number }[]
+    const isWatched = config.watchedSeats.some((s) => s.row === row && s.col === col)
+    const isSightRow = config.sightRows.includes(row)
+    const isCenter = centerCols.includes(col)
+    const isExcluded = config.excludedSeats.some((s) => s.row === row && s.col === col)
+
+    const items: { label: string; action?: () => void; hint?: HighlightHint; info?: boolean }[] = [
+      isExcluded ? {
+        label: '제외 해제',
+        action: () => { onToggleExcludedSeat(row, col); onClose() },
+      } : null,
+      ...primeMatches.map(({ r, i }) => ({
+        label: '명당 범위 해제',
+        hint: { type: 'prime' as const, range: r },
+        action: () => { onRemovePrimeRange(i); onClose() },
+      })),
+      isWatched ? {
+        label: '실관람 해제',
+        hint: { type: 'watched' as const, row, col },
+        action: () => { onToggleWatchedSeat(row, col); onClose() },
+      } : null,
+      isSightRow ? {
+        label: '시선일치행 해제',
+        hint: { type: 'sightRow' as const, row },
+        action: () => { onToggleSightRow(row); onClose() },
+      } : null,
+      isCenter ? { label: '중앙열 (자동 계산)', info: true } : null,
+    ].filter(Boolean) as { label: string; action?: () => void; hint?: HighlightHint; info?: boolean }[]
+
+    return (
+      <div
+        ref={ref}
+        style={{ position: 'fixed', left: x + 8, top: y + 8, zIndex: 50 }}
+        className="bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-40 text-sm"
+        onMouseLeave={() => onHoverHint(null)}
+      >
+        <div className="px-3 py-1 text-xs text-gray-400 border-b border-gray-100 mb-1">
+          {indexToLabel(row - 1)}{col}
+        </div>
+        {items.map((item, i) =>
+          item.info ? (
+            <div key={i} className="px-3 py-1.5 text-xs text-gray-400">{item.label}</div>
+          ) : (
+            <button
+              key={i}
+              type="button"
+              onClick={item.action}
+              onMouseEnter={() => item.hint && onHoverHint(item.hint)}
+              className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors"
+            >
+              {item.label}
+            </button>
+          )
+        )}
+      </div>
+    )
+  }
+)
