@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, forwardRef } from 'react'
+import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
 import type { SeatMapConfig, Range, ExitSide } from '../types'
 import type { EditMode } from '../App'
@@ -620,8 +621,8 @@ export default function SeatMapPreview({
 
       }
 
-      {/* 팝업 */}
-      {popup && (
+      {/* 팝업 — transform 밖(body)에 portal로 렌더해 fixed 위치 정상화 */}
+      {popup && createPortal(
         <SeatPopup
           ref={popupRef}
           popup={popup}
@@ -636,7 +637,8 @@ export default function SeatMapPreview({
           onToggleExit={onToggleExit}
           onHoverHint={setHighlightHint}
           onClose={() => { setPopup(null); setHighlightHint(null) }}
-        />
+        />,
+        document.body
       )}
     </div>
   )
