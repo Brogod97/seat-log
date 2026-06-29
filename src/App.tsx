@@ -8,6 +8,17 @@ export type EditMode = 'layout' | 'prime' | 'watched' | null
 
 const STORAGE_KEY = 'seat_map_current'
 const SAVES_KEY = 'seat_map_saves'
+const THEME_KEY = 'seat_map_theme'
+
+function loadTheme(): 'light' | 'dark' {
+  try {
+    const saved = localStorage.getItem(THEME_KEY)
+    if (saved === 'light' || saved === 'dark') return saved
+    // 저장값 없으면 OS 설정 따름
+    if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) return 'dark'
+  } catch {}
+  return 'light'
+}
 
 function configKey(c: SeatMapConfig): string {
   return [c.brand, c.branch, c.screen].filter(Boolean).join('|') || '이름 없음'
@@ -47,11 +58,17 @@ function App() {
   const [config, setConfig] = useState<SeatMapConfig>(loadConfig)
   const [editMode, setEditMode] = useState<EditMode>(null)
   const [saves, setSaves] = useState<Record<string, SeatMapConfig>>(loadSaves)
+  const [theme, setTheme] = useState<'light' | 'dark'>(loadTheme)
   const importRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(config)) } catch {}
   }, [config])
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark')
+    try { localStorage.setItem(THEME_KEY, theme) } catch {}
+  }, [theme])
 
   function saveCurrentConfig() {
     const key = configKey(config)
@@ -268,26 +285,36 @@ function App() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      <aside className="w-80 shrink-0 bg-white border-r border-gray-200 p-6 overflow-y-auto">
+    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+      <aside className="w-80 shrink-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 p-6 overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-lg font-bold text-gray-800">좌석표 생성기</h1>
-          <button
-            type="button"
-            onClick={resetConfig}
-            className="text-xs px-2 py-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded border border-gray-200 hover:border-red-200 transition-colors"
-          >
-            초기화
-          </button>
+          <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">좌석표 생성기</h1>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+              className="text-sm px-2 py-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 rounded border border-gray-200 dark:border-gray-600 transition-colors"
+              title={theme === 'dark' ? '라이트 모드로' : '다크 모드로'}
+            >
+              {theme === 'dark' ? '☀️' : '🌙'}
+            </button>
+            <button
+              type="button"
+              onClick={resetConfig}
+              className="text-xs px-2 py-1 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded border border-gray-200 dark:border-gray-600 hover:border-red-200 transition-colors"
+            >
+              초기화
+            </button>
+          </div>
         </div>
 
         {/* 저장 / 불러오기 */}
-        <div className="mb-4 pb-4 border-b border-gray-200">
+        <div className="mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
           {/* 불러오기 드롭다운 */}
           {Object.keys(saves).length > 0 && (
             <div className="mb-2">
               <select
-                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-2 py-1.5 text-sm"
                 defaultValue=""
                 onChange={(e) => { if (e.target.value) loadSavedConfig(e.target.value) }}
               >
@@ -314,7 +341,7 @@ function App() {
               type="button"
               onClick={exportJson}
               disabled={Object.keys(saves).length === 0}
-              className="text-xs px-2 py-1.5 border border-gray-300 rounded text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="text-xs px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               title="JSON 내보내기"
             >
               내보내기
@@ -322,7 +349,7 @@ function App() {
             <button
               type="button"
               onClick={() => importRef.current?.click()}
-              className="text-xs px-2 py-1.5 border border-gray-300 rounded text-gray-600 hover:bg-gray-50 transition-colors"
+              className="text-xs px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               title="JSON 가져오기"
             >
               가져오기
@@ -353,12 +380,12 @@ function App() {
 
         {/* 좌석표 — 편집 + 다운로드 이미지 영역 겸용 */}
         <div className="inline-block">
-          <div className="flex items-center gap-2 mb-2 text-sm text-gray-500">
+          <div className="flex items-center gap-2 mb-2 text-sm text-gray-500 dark:text-gray-400">
             <span>📷 다운로드 이미지 영역</span>
-            <span className="text-xs text-gray-400">(점선 안쪽이 그대로 PNG로 저장됩니다)</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500">(점선 안쪽이 그대로 PNG로 저장됩니다)</span>
           </div>
           {/* 점선 테두리는 미리보기용 — ref는 안쪽 카드에 있어 PNG에는 미포함 */}
-          <div className="inline-block rounded-lg border-2 border-dashed border-gray-300 p-1">
+          <div className="inline-block rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 p-1">
             <div ref={exportRef} className="inline-block bg-white rounded-lg p-6">
               <SeatMapPreview
             config={config}

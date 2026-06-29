@@ -82,23 +82,23 @@ export default function SeatMapForm({
       {/* 영화관 선택 */}
       <TheaterSelector config={config} update={update} />
 
-      <hr className="my-4 border-gray-200" />
+      <hr className="my-4 border-gray-200 dark:border-gray-700" />
 
       {/* 레이아웃 (그리드 크기 + 복도 + 제외 영역 통합) */}
       <div className="mb-4">
         <div className="flex items-center justify-between mb-2">
-          <label className="text-sm font-medium text-gray-700">레이아웃</label>
+          <label className="text-sm font-medium text-gray-700 dark:text-gray-200">레이아웃</label>
           <div className="flex gap-1 items-center">
             {editMode === null && (
               <button type="button" onClick={onEnterGridResize}
-                className="text-xs px-2 py-1 rounded border border-gray-300 text-gray-500 hover:bg-gray-50 transition-colors">
+                className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                 초기화
               </button>
             )}
             <EditModeButton label="편집" color="indigo" mode="layout" active={editMode === 'layout'} {...btnProps} />
           </div>
         </div>
-        <p className="text-sm text-gray-500 mb-2">{config.rows}행 × {config.cols}열</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{config.rows}행 × {config.cols}열</p>
         <div className="flex flex-wrap gap-1">
           {config.rowAisles.map((v) => (
             <span key={`r${v}`} className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-800 text-xs rounded">
@@ -121,7 +121,7 @@ export default function SeatMapForm({
         </div>
       </div>
 
-      <hr className="my-4 border-gray-200" />
+      <hr className="my-4 border-gray-200 dark:border-gray-700" />
 
       {/* 시선일치행 */}
       <Section
@@ -156,7 +156,7 @@ export default function SeatMapForm({
         resetIcon={<ResetIcon onClick={() => update({ watchedSeats: [] })} title="실관람 초기화" disabled={config.watchedSeats.length === 0} />}
       >
         {config.watchedSeats.length === 0 ? (
-          <p className="text-xs text-gray-400">없음</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500">없음</p>
         ) : (
           <div className="flex flex-col gap-1">
             {[...config.watchedSeats]
@@ -260,7 +260,7 @@ function TheaterSelector({
     <div className="mb-2">
       {/* 브랜드 */}
       <div className="mb-3">
-        <label className="block text-xs font-medium text-gray-500 mb-1">영화관</label>
+        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">영화관</label>
         <div className="flex gap-1 flex-wrap">
           {BRAND_LIST.map((b) => (
             <button
@@ -269,8 +269,8 @@ function TheaterSelector({
               onClick={() => handleBrandChange(b)}
               className={`px-3 py-1 rounded-full text-xs border transition-colors ${
                 config.brand === b
-                  ? 'bg-gray-800 text-white border-gray-800'
-                  : 'bg-white text-gray-600 border-gray-300 hover:border-gray-500'
+                  ? 'bg-gray-800 dark:bg-gray-100 text-white dark:text-gray-900 border-gray-800 dark:border-gray-100'
+                  : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-gray-500'
               }`}
             >
               {b}
@@ -281,12 +281,12 @@ function TheaterSelector({
 
       {/* 지점 */}
       <div className="mb-3">
-        <label className="block text-xs font-medium text-gray-500 mb-1">지점</label>
+        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">지점</label>
         <select
           value={isBranchCustom ? CUSTOM : config.branch}
           onChange={(e) => handleBranchChange(e.target.value)}
           disabled={!config.brand}
-          className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm disabled:bg-gray-50 disabled:text-gray-400"
+          className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-2 py-1.5 text-sm disabled:bg-gray-50 dark:disabled:bg-gray-800 disabled:text-gray-400"
         >
           <option value="">선택</option>
           {topBranches.length > 0 && (
@@ -304,7 +304,7 @@ function TheaterSelector({
             value={config.branch === CUSTOM ? '' : config.branch}
             onChange={(e) => update({ branch: e.target.value })}
             placeholder="지점명 입력"
-            className="w-full mt-1 border border-gray-300 rounded px-2 py-1.5 text-sm"
+            className="w-full mt-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-2 py-1.5 text-sm"
             autoFocus
           />
         )}
@@ -312,12 +312,12 @@ function TheaterSelector({
 
       {/* 상영관 */}
       <div className="mb-3">
-        <label className="block text-xs font-medium text-gray-500 mb-1">상영관</label>
+        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">상영관</label>
         <select
           value={isScreenCustom ? CUSTOM : config.screen}
           onChange={(e) => handleScreenChange(e.target.value)}
           disabled={!config.brand}
-          className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm disabled:bg-gray-50 disabled:text-gray-400"
+          className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-2 py-1.5 text-sm disabled:bg-gray-50 dark:disabled:bg-gray-800 disabled:text-gray-400"
         >
           <option value="">선택</option>
           {screens.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -328,7 +328,7 @@ function TheaterSelector({
             value={config.screen === CUSTOM ? '' : config.screen}
             onChange={(e) => update({ screen: e.target.value })}
             placeholder="상영관명 입력"
-            className="w-full mt-1 border border-gray-300 rounded px-2 py-1.5 text-sm"
+            className="w-full mt-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-2 py-1.5 text-sm"
             autoFocus
           />
         )}
@@ -346,7 +346,7 @@ function Section({ label, button, resetIcon, children }: { label: React.ReactNod
   return (
     <div className="mb-4">
       <div className="flex items-center justify-between mb-2">
-        <label className="text-sm font-medium text-gray-700 flex items-center">
+        <label className="text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center">
           {label}
         </label>
         <div className="flex items-center gap-1">
