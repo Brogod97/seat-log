@@ -21,11 +21,11 @@ interface Props {
   onRemovePrimeRange: (index: number) => void
   onAddWatchedRange: (range: Range) => void
   onToggleWatchedSeat: (row: number, col: number) => void
+  onSetWatchedMemo: (row: number, col: number, memo: string) => void
   onToggleSightRow: (row: number) => void
   onToggleAisle: (row: number) => void
   onToggleColAisle: (col: number) => void
   onToggleExcludedSeat: (row: number, col: number) => void
-  onAddExcludedRange: (range: Range) => void
   onExcludeSeats: (seats: { row: number; col: number }[]) => void
 }
 
@@ -134,15 +134,14 @@ export default function SeatMapPreview({
   config, editMode, layoutPhase, modeStartPos,
   onEnterModeFrom,
   onCancelEditMode, onCompleteEditMode, onSetGridSize,
-  onToggleExcludedSeat, onAddExcludedRange, onExcludeSeats,
+  onToggleExcludedSeat, onExcludeSeats,
   onAddPrimeRange, onRemovePrimeRange,
-  onAddWatchedRange, onToggleWatchedSeat, onToggleSightRow,
+  onAddWatchedRange, onToggleWatchedSeat, onSetWatchedMemo, onToggleSightRow,
   onToggleAisle, onToggleColAisle,
 }: Props) {
   const { rows, cols, rowAisles, colAisles } = config
   const SEAT = 32
   const AISLE = 12
-  const AISLE_PREVIEW = 10
 
   const rowAisleSet = new Set(rowAisles)
   const colAisleSet = new Set(colAisles)
@@ -200,25 +199,16 @@ export default function SeatMapPreview({
     return h
   })()
 
-  // 폴리곤 확정: excluded 진입 후 모드/페이즈가 바뀔 때
-  const wasExcludedRef = useRef(false)
+  // 폴리곤 편집 모드(레이아웃 2단계)를 벗어나면 미완성 꼭짓점 정리
+  const wasPolyModeRef = useRef(false)
   useEffect(() => {
-    const isExcludedNow = editMode === 'excluded' || (editMode === null && wasExcludedRef.current)
-    if (wasExcludedRef.current && !isExcludedNow) {
-      if (polyVertices.length >= 3) {
-        const seats: { row: number; col: number }[] = []
-        for (let r = 1; r <= rows; r++) {
-          for (let c = 1; c <= cols; c++) {
-            if (pointInOrOnPolygon(r, c, polyVertices)) seats.push({ row: r, col: c })
-          }
-        }
-        if (seats.length > 0) onExcludeSeats(seats)
-      }
+    const isPolyModeNow = editMode === 'layout' && layoutPhase === 'edit'
+    if (wasPolyModeRef.current && !isPolyModeNow) {
       setPolyVertices([])
     }
-    wasExcludedRef.current = editMode === 'excluded'
+    wasPolyModeRef.current = isPolyModeNow
     prevEditModeRef.current = editMode
-  }, [editMode])
+  }, [editMode, layoutPhase])
 
   // 폴리곤 미리보기: 현재 꼭짓점 + hover 위치로 계산
   const polyPreviewVertices = hoverPos && polyVertices.length > 0
@@ -242,9 +232,6 @@ export default function SeatMapPreview({
     }
     if ((editMode === 'prime' || editMode === 'watched') && modeStartPos) {
       setFirstClick(modeStartPos)
-    }
-    if (editMode === 'excluded' && modeStartPos) {
-      setPolyVertices([modeStartPos])
     }
   }, [editMode, modeStartPos])
 
@@ -270,7 +257,7 @@ export default function SeatMapPreview({
     const isExcluded = config.excludedSeats.some((s) => s.row === row && s.col === col)
 
     // excluded 폴리곤 미리보기 (excluded 모드 또는 layout 2단계)
-    const isPolyMode = editMode === 'excluded' || (editMode === 'layout' && layoutPhase === 'edit')
+    const isPolyMode = editMode === 'layout' && layoutPhase === 'edit'
     if (isPolyMode) {
       const isFirstVertex = polyVertices[0]?.row === row && polyVertices[0]?.col === col
       const isVertex = polyVertices.some((v) => v.row === row && v.col === col)
@@ -315,7 +302,6 @@ export default function SeatMapPreview({
   function commitRange(range: Range) {
     if (editMode === 'prime') onAddPrimeRange(range)
     else if (editMode === 'watched') onAddWatchedRange(range)
-    else if (editMode === 'excluded') onAddExcludedRange(range)
   }
 
   function handleRangeMouseUp(pos: SeatPos) {
@@ -338,13 +324,6 @@ export default function SeatMapPreview({
 
   function handleSeatClick(row: number, col: number, e: React.MouseEvent) {
     if (suppressNextClickRef.current) { suppressNextClickRef.current = false; return }
-    if (editMode === 'excluded') {
-      const first = polyVertices[0]
-      if (polyVertices.length >= 3 && first && first.row === row && first.col === col) {
-        onCompleteEditMode(); return
-      }
-      setPolyVertices((v) => [...v, { row, col }]); return
-    }
     // layout 2단계: 좌석 클릭 = 폴리곤 제외 선택
     if (editMode === 'layout' && layoutPhase === 'edit') {
       const first = polyVertices[0]
@@ -460,7 +439,7 @@ export default function SeatMapPreview({
       >
         <div style={{ display: 'inline-block', userSelect: 'none', position: 'relative' }}>
           {/* 폴리곤 SVG 오버레이 — inner div 기준으로 절대 위치 */}
-          {(editMode === 'excluded' || (editMode === 'layout' && layoutPhase === 'edit')) && polyPreviewVertices.length >= 2 && (
+          {editMode === 'layout' && layoutPhase === 'edit' && polyPreviewVertices.length >= 2 && (
             <svg
               style={{
                 position: 'absolute', top: 0, left: 0,
@@ -608,6 +587,7 @@ export default function SeatMapPreview({
           onEnterModeFrom={onEnterModeFrom}
           onRemovePrimeRange={onRemovePrimeRange}
           onToggleWatchedSeat={onToggleWatchedSeat}
+          onSetWatchedMemo={onSetWatchedMemo}
           onToggleSightRow={onToggleSightRow}
           onToggleExcludedSeat={onToggleExcludedSeat}
           onHoverHint={setHighlightHint}
@@ -709,6 +689,7 @@ interface SeatPopupProps {
   onEnterModeFrom: (mode: 'prime' | 'watched' | 'excluded', pos: { row: number; col: number }) => void
   onRemovePrimeRange: (i: number) => void
   onToggleWatchedSeat: (row: number, col: number) => void
+  onSetWatchedMemo: (row: number, col: number, memo: string) => void
   onToggleSightRow: (row: number) => void
   onToggleExcludedSeat: (row: number, col: number) => void
   onHoverHint: (hint: HighlightHint) => void
@@ -716,13 +697,14 @@ interface SeatPopupProps {
 }
 
 const SeatPopup = forwardRef<HTMLDivElement, SeatPopupProps>(
-  ({ popup, config, centerCols, onEnterModeFrom, onRemovePrimeRange, onToggleWatchedSeat, onToggleSightRow, onToggleExcludedSeat, onHoverHint, onClose }, ref) => {
+  ({ popup, config, centerCols, onEnterModeFrom, onRemovePrimeRange, onToggleWatchedSeat, onSetWatchedMemo, onToggleSightRow, onToggleExcludedSeat, onHoverHint, onClose }, ref) => {
     const { row, col, x, y } = popup
 
     const primeMatches = config.primeRanges
       .map((r, i) => inRange(row, col, r) ? { r, i } : null)
       .filter(Boolean) as { r: Range; i: number }[]
-    const isWatched = config.watchedSeats.some((s) => s.row === row && s.col === col)
+    const watchedSeat = config.watchedSeats.find((s) => s.row === row && s.col === col)
+    const isWatched = !!watchedSeat
     const isSightRow = config.sightRows.includes(row)
     const isCenter = centerCols.includes(col)
     const isExcluded = config.excludedSeats.some((s) => s.row === row && s.col === col)
@@ -766,6 +748,18 @@ const SeatPopup = forwardRef<HTMLDivElement, SeatPopupProps>(
         <div className="px-3 py-1.5 text-xs font-medium text-gray-500 border-b border-gray-100">
           {indexToLabel(row - 1)}{col}
         </div>
+        {isWatched && (
+          <div className="px-3 py-2 border-b border-gray-100">
+            <label className="block text-xs text-gray-400 mb-1">메모</label>
+            <textarea
+              defaultValue={watchedSeat?.memo ?? ''}
+              onChange={(e) => onSetWatchedMemo(row, col, e.target.value)}
+              placeholder="좌석 후기 메모…"
+              rows={2}
+              className="w-full text-xs border border-gray-200 rounded px-2 py-1 resize-y focus:outline-none focus:ring-1 focus:ring-yellow-400"
+            />
+          </div>
+        )}
         {rows.map((item, i) => {
           if ('divider' in item) return <div key={i} className="my-1 border-t border-gray-100" />
           if ('info' in item) return <div key={i} className="px-3 py-1.5 text-xs text-gray-400">{item.label}</div>

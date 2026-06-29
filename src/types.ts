@@ -22,4 +22,5 @@ export interface Range {
 export interface Seat {
   row: number
   col: number
+  memo?: string  // 실관람 좌석 메모
 }

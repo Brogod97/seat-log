@@ -66,13 +66,6 @@ function App() {
     if (saved) { setConfig({ ...DEFAULT_CONFIG, ...saved }); setEditMode(null) }
   }
 
-  function deleteSavedConfig(key: string) {
-    const next = { ...saves }
-    delete next[key]
-    setSaves(next)
-    writeSaves(next)
-  }
-
   function exportJson() {
     const blob = new Blob([JSON.stringify(saves, null, 2)], { type: 'application/json' })
     const a = document.createElement('a')
@@ -187,6 +180,15 @@ function App() {
     })
   }
 
+  function setWatchedMemo(row: number, col: number, memo: string) {
+    setConfig((c) => ({
+      ...c,
+      watchedSeats: c.watchedSeats.map((s) =>
+        s.row === row && s.col === col ? { ...s, memo } : s
+      ),
+    }))
+  }
+
   function addWatchedRange(range: Range) {
     setConfig((c) => {
       const toAdd: { row: number; col: number }[] = []
@@ -234,20 +236,6 @@ function App() {
           ? c.excludedSeats.filter((s) => !(s.row === row && s.col === col))
           : [...c.excludedSeats, { row, col }],
       }
-    })
-  }
-
-  function addExcludedRange(range: Range) {
-    setConfig((c) => {
-      const toAdd: { row: number; col: number }[] = []
-      for (let r = range.rowStart; r <= range.rowEnd; r++) {
-        for (let col = range.colStart; col <= range.colEnd; col++) {
-          if (!c.excludedSeats.some((s) => s.row === r && s.col === col)) {
-            toAdd.push({ row: r, col })
-          }
-        }
-      }
-      return { ...c, excludedSeats: [...c.excludedSeats, ...toAdd] }
     })
   }
 
@@ -351,7 +339,7 @@ function App() {
           onCompleteEditMode={completeEditMode}
         />
       </aside>
-      <main className="flex-1 p-6 overflow-auto" onClick={() => { if (editMode && editMode !== 'excluded') completeEditMode() }}>
+      <main className="flex-1 p-6 overflow-auto" onClick={() => { if (editMode) completeEditMode() }}>
         <div className="flex justify-end mb-4">
           <button
             type="button"
@@ -372,12 +360,12 @@ function App() {
           onCompleteEditMode={completeEditMode}
           onSetGridSize={setGridSize}
           onToggleExcludedSeat={toggleExcludedSeat}
-          onAddExcludedRange={addExcludedRange}
           onExcludeSeats={excludeSeats}
           onAddPrimeRange={addPrimeRange}
           onRemovePrimeRange={removePrimeRange}
           onAddWatchedRange={addWatchedRange}
           onToggleWatchedSeat={toggleWatchedSeat}
+          onSetWatchedMemo={setWatchedMemo}
           onToggleSightRow={toggleSightRow}
           onToggleAisle={toggleRowAisle}
           onToggleColAisle={toggleColAisle}

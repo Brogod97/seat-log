@@ -60,32 +60,6 @@ function EditModeButton({
   )
 }
 
-function CountInput({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
-  const [text, setText] = useState(String(value))
-
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setText(e.target.value)
-    const n = parseInt(e.target.value)
-    if (!isNaN(n) && n >= 1 && n <= 99) onChange(n)
-  }
-
-  function handleBlur() {
-    const n = parseInt(text)
-    if (isNaN(n) || n < 1) { setText(String(value)); return }
-    const clamped = Math.min(n, 99)
-    setText(String(clamped))
-    onChange(clamped)
-  }
-
-  return (
-    <div className="mb-4">
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      <input type="number" value={text} onChange={handleChange} onBlur={handleBlur}
-        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm" />
-    </div>
-  )
-}
-
 export default function SeatMapForm({
   config, onChange, editMode,
   onEnterEditMode, onEnterGridResize, onCancelEditMode, onCompleteEditMode,
@@ -93,6 +67,8 @@ export default function SeatMapForm({
   function update(partial: Partial<SeatMapConfig>) {
     onChange({ ...config, ...partial })
   }
+
+  const [expandedWatched, setExpandedWatched] = useState<number | null>(null)
 
   const btnProps = {
     currentMode: editMode,
@@ -179,14 +155,46 @@ export default function SeatMapForm({
         label={<><Dot color="bg-yellow-300" />실관람 좌석</>}
         resetIcon={<ResetIcon onClick={() => update({ watchedSeats: [] })} title="실관람 초기화" disabled={config.watchedSeats.length === 0} />}
       >
-        <TagList
-          items={[...config.watchedSeats]
-            .map((s, i) => ({ s, i }))
-            .sort((a, b) => a.s.row !== b.s.row ? a.s.row - b.s.row : a.s.col - b.s.col)
-            .map(({ s, i }) => ({ key: i, label: `${indexToLabel(s.row - 1)}${s.col}` }))}
-          color="yellow"
-          onRemove={(i) => update({ watchedSeats: config.watchedSeats.filter((_, j) => j !== i) })}
-        />
+        {config.watchedSeats.length === 0 ? (
+          <p className="text-xs text-gray-400">없음</p>
+        ) : (
+          <div className="flex flex-col gap-1">
+            {[...config.watchedSeats]
+              .map((s, i) => ({ s, i }))
+              .sort((a, b) => a.s.row !== b.s.row ? a.s.row - b.s.row : a.s.col - b.s.col)
+              .map(({ s, i }) => (
+                <div key={i} className="rounded bg-yellow-50 border border-yellow-200">
+                  <div className="flex items-center justify-between px-2 py-1">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedWatched(expandedWatched === i ? null : i)}
+                      className="flex items-center gap-1.5 text-xs text-yellow-800 hover:text-yellow-900"
+                    >
+                      <span className="font-medium">{indexToLabel(s.row - 1)}{s.col}</span>
+                      {s.memo?.trim() && <span title="메모 있음">📝</span>}
+                      <span className="text-yellow-400">{expandedWatched === i ? '▾' : '▸'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { update({ watchedSeats: config.watchedSeats.filter((_, j) => j !== i) }); if (expandedWatched === i) setExpandedWatched(null) }}
+                      className="text-yellow-500 hover:text-red-600 text-xs"
+                    >×</button>
+                  </div>
+                  {expandedWatched === i && (
+                    <div className="px-2 pb-2">
+                      <textarea
+                        value={s.memo ?? ''}
+                        onChange={(e) => update({ watchedSeats: config.watchedSeats.map((w, j) => j === i ? { ...w, memo: e.target.value } : w) })}
+                        placeholder="좌석 후기 메모…"
+                        rows={2}
+                        className="w-full text-xs border border-yellow-200 rounded px-2 py-1 resize-y focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
+          </div>
+        )}
       </Section>
     </div>
   )
