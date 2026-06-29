@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, forwardRef } from 'react'
-import type { SeatMapConfig, Range } from '../types'
+import type { CSSProperties } from 'react'
+import type { SeatMapConfig, Range, ExitSide } from '../types'
 import type { EditMode } from '../App'
 import { calcCenterCols } from '../utils/centerCols'
 import { indexToLabel } from '../utils/rowLabel'
@@ -27,7 +28,7 @@ interface Props {
   onToggleColAisle: (col: number) => void
   onToggleExcludedSeat: (row: number, col: number) => void
   onExcludeSeats: (seats: { row: number; col: number }[]) => void
-  onToggleExit: (row: number, col: number) => void
+  onToggleExit: (row: number, col: number, side: ExitSide) => void
   viewOnly?: boolean
 }
 
@@ -130,6 +131,16 @@ function pointInOrOnPolygon(row: number, col: number, vertices: SeatPos[]): bool
     if (pointNearSegment(col, row, vertices[i].col, vertices[i].row, vertices[j].col, vertices[j].row)) return true
   }
   return false
+}
+
+// 출입구 선: 좌석의 바깥 변에 문 위치를 표시
+function exitLineStyle(side: ExitSide): CSSProperties {
+  const C = '#059669', T = 4, OUT = -5
+  const base: CSSProperties = { position: 'absolute', background: C, borderRadius: 2, zIndex: 5 }
+  if (side === 'left') return { ...base, left: OUT, top: 2, bottom: 2, width: T }
+  if (side === 'right') return { ...base, right: OUT, top: 2, bottom: 2, width: T }
+  if (side === 'top') return { ...base, top: OUT, left: 2, right: 2, height: T }
+  return { ...base, bottom: OUT, left: 2, right: 2, height: T }  // bottom
 }
 
 export default function SeatMapPreview({
@@ -378,7 +389,7 @@ export default function SeatMapPreview({
       <p className="text-sm text-gray-500 mb-3">
         {rows}행 × {cols}열
         <span className="mx-2 text-gray-300">|</span>
-        총 {rows * cols - new Set([...config.excludedSeats, ...config.exits].map((s) => `${s.row}-${s.col}`)).size}석
+        총 {rows * cols - config.excludedSeats.length}석
         {centerCols.length > 0 && (
           <span className="ml-2 text-blue-500">중앙열 {centerCols.join(', ')}열</span>
         )}
@@ -446,12 +457,12 @@ export default function SeatMapPreview({
           }
         }}
       >
-        {/* 스크린 (항상 맨 위) */}
+        {/* 스크린 (항상 맨 위, 중앙) */}
         <div
           style={{
-            width: gridPixelWidth,
+            width: Math.round(gridPixelWidth * 0.5),
             height: 22,
-            marginBottom: 14,
+            margin: '0 auto 14px',
             borderRadius: 4,
             background: '#d1d5db',
             color: '#4b5563',
@@ -510,21 +521,19 @@ export default function SeatMapPreview({
                     const col = ci + 1
                     const isAisleCol = colAisleSet.has(col)
                     const { bg, ring, highlight, excluded } = getSeatAppearance(row, col)
-                    const isExit = config.exits.some((s) => s.row === row && s.col === col)
+                    const exitSides = config.exits.filter((s) => s.row === row && s.col === col).map((s) => s.side)
                     const inEditMode = editMode !== null
 
                     return (
                       <>
                         <div
                           key={`seat-${ri}-${ci}`}
-                          style={{ width: SEAT, height: SEAT, flexShrink: 0 }}
+                          style={{ width: SEAT, height: SEAT, flexShrink: 0, position: 'relative' }}
                           className={[
-                            isExit ? 'bg-emerald-100' : bg,
-                            'rounded flex items-center justify-center transition-colors cursor-pointer',
+                            bg, 'rounded flex items-center justify-center transition-colors cursor-pointer',
                             excluded ? 'text-gray-300' : 'text-gray-700',
                             inEditMode ? 'hover:brightness-90' : '',
-                            isExit ? 'ring-2 ring-offset-0 ring-emerald-500'
-                              : highlight ? 'ring-2 ring-offset-0 ring-gray-700 brightness-75'
+                            highlight ? 'ring-2 ring-offset-0 ring-gray-700 brightness-75'
                               : ring ? `ring-2 ring-offset-0 ${ring}` : '',
                           ].filter(Boolean).join(' ')}
                           onMouseDown={() => { if (isRangeMode) handleRangeMouseDown({ row, col }) }}
@@ -532,12 +541,13 @@ export default function SeatMapPreview({
                           onMouseUp={() => { if (isRangeMode) handleRangeMouseUp({ row, col }) }}
                           onClick={(e) => { if (!isRangeMode) handleSeatClick(row, col, e) }}
                         >
-                          {isExit
-                            ? <span style={{ fontSize: 13, lineHeight: 1 }}>🚪</span>
-                            : excluded
+                          {excluded
                             ? <span style={{ fontSize: 11, lineHeight: 1 }}>╳</span>
                             : <span style={{ fontSize: 9, lineHeight: 1 }}>{indexToLabel(ri)}{col}</span>
                           }
+                          {exitSides.map((side) => (
+                            <div key={side} style={exitLineStyle(side)} />
+                          ))}
                         </div>
 
                         {col < cols && (() => {
@@ -726,7 +736,7 @@ interface SeatPopupProps {
   onSetWatchedMemo: (row: number, col: number, memo: string) => void
   onToggleSightRow: (row: number) => void
   onToggleExcludedSeat: (row: number, col: number) => void
-  onToggleExit: (row: number, col: number) => void
+  onToggleExit: (row: number, col: number, side: ExitSide) => void
   onHoverHint: (hint: HighlightHint) => void
   onClose: () => void
 }
@@ -743,7 +753,14 @@ const SeatPopup = forwardRef<HTMLDivElement, SeatPopupProps>(
     const isSightRow = config.sightRows.includes(row)
     const isCenter = centerCols.includes(col)
     const isExcluded = config.excludedSeats.some((s) => s.row === row && s.col === col)
-    const isExit = config.exits.some((s) => s.row === row && s.col === col)
+    // 좌석이 그리드 가장자리에 닿는 변마다 출입구 선택지 제공
+    const exitSideOptions: { side: ExitSide; label: string }[] = [
+      col === 1 ? { side: 'left' as const, label: '왼쪽' } : null,
+      col === config.cols ? { side: 'right' as const, label: '오른쪽' } : null,
+      row === 1 ? { side: 'top' as const, label: '앞쪽' } : null,
+      row === config.rows ? { side: 'bottom' as const, label: '뒤쪽' } : null,
+    ].filter(Boolean) as { side: ExitSide; label: string }[]
+    const hasExit = (side: ExitSide) => config.exits.some((s) => s.row === row && s.col === col && s.side === side)
 
     type Item = { label: string; action: () => void; hint?: HighlightHint; danger?: boolean }
     type Divider = { divider: true }
@@ -765,7 +782,10 @@ const SeatPopup = forwardRef<HTMLDivElement, SeatPopupProps>(
       { label: isSightRow ? '시선일치행 해제' : '시선일치행 설정', action: () => { onToggleSightRow(row); onClose() } },
       { label: '명당 범위 설정', action: () => { onClose(); onEnterModeFrom('prime', { row, col }) } },
       { label: '실관람 설정', action: () => { onClose(); onEnterModeFrom('watched', { row, col }) } },
-      { label: isExit ? '🚪 출입구 해제' : '🚪 출입구 지정', action: () => { onToggleExit(row, col); onClose() } },
+      ...exitSideOptions.map(({ side, label }) => ({
+        label: `🚪 출입구(${label}) ${hasExit(side) ? '해제' : '표시'}`,
+        action: () => { onToggleExit(row, col, side); onClose() },
+      })),
       isExcluded ? { label: '제외 해제', action: () => { onToggleExcludedSeat(row, col); onClose() } } : null,
       isCenter ? { info: true, label: '중앙열 (자동 계산)' } : null,
     ].filter(Boolean) as Row[]

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { toPng } from 'html-to-image'
 import SeatMapForm from './components/SeatMapForm'
 import SeatMapPreview from './components/SeatMapPreview'
-import type { SeatMapConfig, Range } from './types'
+import type { SeatMapConfig, Range, ExitSide } from './types'
 
 export type EditMode = 'layout' | 'prime' | 'watched' | null
 
@@ -238,14 +238,14 @@ function App() {
     setLayoutPhase('edit')
   }
 
-  function toggleExit(row: number, col: number) {
+  function toggleExit(row: number, col: number, side: ExitSide) {
     setConfig((c) => {
-      const exists = c.exits.some((s) => s.row === row && s.col === col)
+      const exists = c.exits.some((s) => s.row === row && s.col === col && s.side === side)
       return {
         ...c,
         exits: exists
-          ? c.exits.filter((s) => !(s.row === row && s.col === col))
-          : [...c.exits, { row, col }],
+          ? c.exits.filter((s) => !(s.row === row && s.col === col && s.side === side))
+          : [...c.exits, { row, col, side }],
       }
     })
   }
