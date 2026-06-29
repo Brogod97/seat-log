@@ -285,8 +285,8 @@ function App() {
   }
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen md:h-screen bg-gray-50 dark:bg-gray-900">
-      <aside className="w-full md:w-80 shrink-0 bg-white dark:bg-gray-800 border-b md:border-b-0 md:border-r border-gray-200 dark:border-gray-700 p-4 md:p-6 md:overflow-y-auto">
+    <div className="flex flex-col lg:landscape:flex-row min-h-screen lg:landscape:h-screen bg-gray-50 dark:bg-gray-900">
+      <aside className="order-2 lg:landscape:order-1 w-full lg:landscape:w-80 shrink-0 bg-white dark:bg-gray-800 border-t lg:landscape:border-t-0 lg:landscape:border-r border-gray-200 dark:border-gray-700 p-4 lg:landscape:p-6 lg:landscape:overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">좌석표 생성기</h1>
           <div className="flex items-center gap-1">
@@ -367,7 +367,7 @@ function App() {
           onCompleteEditMode={completeEditMode}
         />
       </aside>
-      <main className="flex-1 p-4 md:p-6 md:overflow-auto" onClick={() => { if (editMode) completeEditMode() }}>
+      <main className="order-1 lg:landscape:order-2 flex-1 p-4 lg:landscape:p-6 lg:landscape:overflow-auto" onClick={() => { if (editMode) completeEditMode() }}>
         <div className="flex justify-end mb-4">
           <button
             type="button"
