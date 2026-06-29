@@ -118,6 +118,12 @@ export default function SeatMapForm({
               <button type="button" onClick={() => update({ excludedSeats: [] })} className="hover:text-red-600">×</button>
             </span>
           )}
+          {config.exits.length > 0 && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-800 text-xs rounded">
+              🚪 출입구 {config.exits.length}
+              <button type="button" onClick={() => update({ exits: [] })} className="hover:text-red-600">×</button>
+            </span>
+          )}
         </div>
       </div>
 

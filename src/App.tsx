@@ -52,6 +52,7 @@ const DEFAULT_CONFIG: SeatMapConfig = {
   primeRanges: [],
   watchedSeats: [],
   excludedSeats: [],
+  exits: [],
 }
 
 function App() {
@@ -231,9 +232,22 @@ function App() {
       primeRanges: [],
       watchedSeats: [],
       excludedSeats: [],
+      exits: [],
     }))
     // 크기 확정 후 layout 2단계(복도/제외 편집)로 자동 전환
     setLayoutPhase('edit')
+  }
+
+  function toggleExit(row: number, col: number) {
+    setConfig((c) => {
+      const exists = c.exits.some((s) => s.row === row && s.col === col)
+      return {
+        ...c,
+        exits: exists
+          ? c.exits.filter((s) => !(s.row === row && s.col === col))
+          : [...c.exits, { row, col }],
+      }
+    })
   }
 
   const [layoutPhase, setLayoutPhase] = useState<'size' | 'edit'>('size')
@@ -363,6 +377,7 @@ function App() {
     onToggleSightRow: toggleSightRow,
     onToggleAisle: toggleRowAisle,
     onToggleColAisle: toggleColAisle,
+    onToggleExit: toggleExit,
   }
 
   return (

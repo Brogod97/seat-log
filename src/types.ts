@@ -10,6 +10,7 @@ export interface SeatMapConfig {
   primeRanges: Range[]  // 명당 범위
   watchedSeats: Seat[]  // 실관람 칸
   excludedSeats: Seat[] // 제외 영역
+  exits: Seat[]         // 출입구 위치
 }
 
 export interface Range {

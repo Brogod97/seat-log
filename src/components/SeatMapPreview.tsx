@@ -27,6 +27,7 @@ interface Props {
   onToggleColAisle: (col: number) => void
   onToggleExcludedSeat: (row: number, col: number) => void
   onExcludeSeats: (seats: { row: number; col: number }[]) => void
+  onToggleExit: (row: number, col: number) => void
   viewOnly?: boolean
 }
 
@@ -138,7 +139,7 @@ export default function SeatMapPreview({
   onToggleExcludedSeat, onExcludeSeats,
   onAddPrimeRange, onRemovePrimeRange,
   onAddWatchedRange, onToggleWatchedSeat, onSetWatchedMemo, onToggleSightRow,
-  onToggleAisle, onToggleColAisle,
+  onToggleAisle, onToggleColAisle, onToggleExit,
   viewOnly = false,
 }: Props) {
   // viewOnly(보기 전용)일 땐 편집 상태를 무시해 깔끔한 이미지로만 렌더링
@@ -377,7 +378,7 @@ export default function SeatMapPreview({
       <p className="text-sm text-gray-500 mb-3">
         {rows}행 × {cols}열
         <span className="mx-2 text-gray-300">|</span>
-        총 {rows * cols - config.excludedSeats.length}석
+        총 {rows * cols - new Set([...config.excludedSeats, ...config.exits].map((s) => `${s.row}-${s.col}`)).size}석
         {centerCols.length > 0 && (
           <span className="ml-2 text-blue-500">중앙열 {centerCols.join(', ')}열</span>
         )}
@@ -413,6 +414,9 @@ export default function SeatMapPreview({
             <span className={`inline-block w-3 h-3 rounded ${color}`} />{label}
           </span>
         ))}
+        {config.exits.length > 0 && (
+          <span className="flex items-center gap-1">🚪 출입구</span>
+        )}
       </div>
 
       {/* Ghost 그리드 (layout 1단계: 크기 선택) */}
@@ -442,6 +446,25 @@ export default function SeatMapPreview({
           }
         }}
       >
+        {/* 스크린 (항상 맨 위) */}
+        <div
+          style={{
+            width: gridPixelWidth,
+            height: 22,
+            marginBottom: 14,
+            borderRadius: 4,
+            background: '#d1d5db',
+            color: '#4b5563',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 11,
+            letterSpacing: 4,
+            fontWeight: 600,
+          }}
+        >
+          SCREEN
+        </div>
         <div style={{ display: 'inline-block', userSelect: 'none', position: 'relative' }}>
           {/* 폴리곤 SVG 오버레이 — inner div 기준으로 절대 위치 */}
           {editMode === 'layout' && layoutPhase === 'edit' && polyPreviewVertices.length >= 2 && (
@@ -487,6 +510,7 @@ export default function SeatMapPreview({
                     const col = ci + 1
                     const isAisleCol = colAisleSet.has(col)
                     const { bg, ring, highlight, excluded } = getSeatAppearance(row, col)
+                    const isExit = config.exits.some((s) => s.row === row && s.col === col)
                     const inEditMode = editMode !== null
 
                     return (
@@ -495,10 +519,12 @@ export default function SeatMapPreview({
                           key={`seat-${ri}-${ci}`}
                           style={{ width: SEAT, height: SEAT, flexShrink: 0 }}
                           className={[
-                            bg, 'rounded flex items-center justify-center transition-colors cursor-pointer',
+                            isExit ? 'bg-emerald-100' : bg,
+                            'rounded flex items-center justify-center transition-colors cursor-pointer',
                             excluded ? 'text-gray-300' : 'text-gray-700',
                             inEditMode ? 'hover:brightness-90' : '',
-                            highlight ? 'ring-2 ring-offset-0 ring-gray-700 brightness-75'
+                            isExit ? 'ring-2 ring-offset-0 ring-emerald-500'
+                              : highlight ? 'ring-2 ring-offset-0 ring-gray-700 brightness-75'
                               : ring ? `ring-2 ring-offset-0 ${ring}` : '',
                           ].filter(Boolean).join(' ')}
                           onMouseDown={() => { if (isRangeMode) handleRangeMouseDown({ row, col }) }}
@@ -506,7 +532,9 @@ export default function SeatMapPreview({
                           onMouseUp={() => { if (isRangeMode) handleRangeMouseUp({ row, col }) }}
                           onClick={(e) => { if (!isRangeMode) handleSeatClick(row, col, e) }}
                         >
-                          {excluded
+                          {isExit
+                            ? <span style={{ fontSize: 13, lineHeight: 1 }}>🚪</span>
+                            : excluded
                             ? <span style={{ fontSize: 11, lineHeight: 1 }}>╳</span>
                             : <span style={{ fontSize: 9, lineHeight: 1 }}>{indexToLabel(ri)}{col}</span>
                           }
@@ -595,6 +623,7 @@ export default function SeatMapPreview({
           onSetWatchedMemo={onSetWatchedMemo}
           onToggleSightRow={onToggleSightRow}
           onToggleExcludedSeat={onToggleExcludedSeat}
+          onToggleExit={onToggleExit}
           onHoverHint={setHighlightHint}
           onClose={() => { setPopup(null); setHighlightHint(null) }}
         />
@@ -697,12 +726,13 @@ interface SeatPopupProps {
   onSetWatchedMemo: (row: number, col: number, memo: string) => void
   onToggleSightRow: (row: number) => void
   onToggleExcludedSeat: (row: number, col: number) => void
+  onToggleExit: (row: number, col: number) => void
   onHoverHint: (hint: HighlightHint) => void
   onClose: () => void
 }
 
 const SeatPopup = forwardRef<HTMLDivElement, SeatPopupProps>(
-  ({ popup, config, centerCols, onEnterModeFrom, onRemovePrimeRange, onToggleWatchedSeat, onSetWatchedMemo, onToggleSightRow, onToggleExcludedSeat, onHoverHint, onClose }, ref) => {
+  ({ popup, config, centerCols, onEnterModeFrom, onRemovePrimeRange, onToggleWatchedSeat, onSetWatchedMemo, onToggleSightRow, onToggleExcludedSeat, onToggleExit, onHoverHint, onClose }, ref) => {
     const { row, col, x, y } = popup
 
     const primeMatches = config.primeRanges
@@ -713,6 +743,7 @@ const SeatPopup = forwardRef<HTMLDivElement, SeatPopupProps>(
     const isSightRow = config.sightRows.includes(row)
     const isCenter = centerCols.includes(col)
     const isExcluded = config.excludedSeats.some((s) => s.row === row && s.col === col)
+    const isExit = config.exits.some((s) => s.row === row && s.col === col)
 
     type Item = { label: string; action: () => void; hint?: HighlightHint; danger?: boolean }
     type Divider = { divider: true }
@@ -734,6 +765,7 @@ const SeatPopup = forwardRef<HTMLDivElement, SeatPopupProps>(
       { label: isSightRow ? '시선일치행 해제' : '시선일치행 설정', action: () => { onToggleSightRow(row); onClose() } },
       { label: '명당 범위 설정', action: () => { onClose(); onEnterModeFrom('prime', { row, col }) } },
       { label: '실관람 설정', action: () => { onClose(); onEnterModeFrom('watched', { row, col }) } },
+      { label: isExit ? '🚪 출입구 해제' : '🚪 출입구 지정', action: () => { onToggleExit(row, col); onClose() } },
       isExcluded ? { label: '제외 해제', action: () => { onToggleExcludedSeat(row, col); onClose() } } : null,
       isCenter ? { info: true, label: '중앙열 (자동 계산)' } : null,
     ].filter(Boolean) as Row[]
