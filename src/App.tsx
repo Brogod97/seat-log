@@ -285,8 +285,8 @@ function App() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
-      <aside className="w-80 shrink-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 p-6 overflow-y-auto">
+    <div className="flex flex-col md:flex-row min-h-screen md:h-screen bg-gray-50 dark:bg-gray-900">
+      <aside className="w-full md:w-80 shrink-0 bg-white dark:bg-gray-800 border-b md:border-b-0 md:border-r border-gray-200 dark:border-gray-700 p-4 md:p-6 md:overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">좌석표 생성기</h1>
           <div className="flex items-center gap-1">
@@ -367,7 +367,7 @@ function App() {
           onCompleteEditMode={completeEditMode}
         />
       </aside>
-      <main className="flex-1 p-6 overflow-auto" onClick={() => { if (editMode) completeEditMode() }}>
+      <main className="flex-1 p-4 md:p-6 md:overflow-auto" onClick={() => { if (editMode) completeEditMode() }}>
         <div className="flex justify-end mb-4">
           <button
             type="button"
@@ -378,11 +378,11 @@ function App() {
           </button>
         </div>
 
-        {/* 좌석표 — 편집 + 다운로드 이미지 영역 겸용 */}
-        <div className="inline-block">
+        {/* 좌석표 — 편집 + 다운로드 이미지 영역 겸용. 좁은 화면에선 가로 스크롤 */}
+        <div className="inline-block max-w-full overflow-x-auto">
           <div className="flex items-center gap-2 mb-2 text-sm text-gray-500 dark:text-gray-400">
             <span>📷 다운로드 이미지 영역</span>
-            <span className="text-xs text-gray-400 dark:text-gray-500">(점선 안쪽이 그대로 PNG로 저장됩니다)</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500 hidden sm:inline">(점선 안쪽이 그대로 PNG로 저장됩니다)</span>
           </div>
           {/* 점선 테두리는 미리보기용 — ref는 안쪽 카드에 있어 PNG에는 미포함 */}
           <div className="inline-block rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 p-1">
