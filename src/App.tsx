@@ -133,31 +133,36 @@ function App() {
   const [modeStartPos, setModeStartPos] = useState<{ row: number; col: number } | null>(null)
   const exportRef = useRef<HTMLDivElement>(null)
 
-  // 프리뷰를 화면 너비에 맞춰 축소 (다운로드 추출엔 영향 없음 — transform은 시각 효과)
-  const fitContainerRef = useRef<HTMLDivElement>(null)
+  // 프리뷰를 영역에 맞춰 확대/축소 (다운로드 추출엔 영향 없음 — transform은 시각 효과)
+  const fitAreaRef = useRef<HTMLDivElement>(null)
   const fitContentRef = useRef<HTMLDivElement>(null)
   const [fitScale, setFitScale] = useState(1)
   const [fitHeight, setFitHeight] = useState<number | undefined>(undefined)
+  const MAX_FIT_SCALE = 2.5
 
   useEffect(() => {
-    const container = fitContainerRef.current
+    const area = fitAreaRef.current
     const content = fitContentRef.current
-    if (!container || !content) return
+    if (!area || !content) return
     function recompute() {
-      const c = fitContainerRef.current, el = fitContentRef.current
-      if (!c || !el) return
-      const natural = el.offsetWidth   // transform 영향 안 받는 레이아웃 너비
-      const avail = c.clientWidth
-      const s = natural > 0 ? Math.min(1, avail / natural) : 1
+      const a = fitAreaRef.current, el = fitContentRef.current
+      if (!a || !el) return
+      const naturalW = el.offsetWidth, naturalH = el.offsetHeight
+      if (naturalW <= 0 || naturalH <= 0) return
+      const availW = a.clientWidth
+      const wScale = availW / naturalW
+      // 좌우 분할(비-compact)에선 영역 높이도 고려해 넘치지 않게, 모바일 스택에선 너비만(세로 스크롤 허용)
+      const hScale = compact ? Infinity : a.clientHeight / naturalH
+      const s = Math.min(wScale, hScale, MAX_FIT_SCALE)
       setFitScale(s)
-      setFitHeight(el.offsetHeight * s)
+      setFitHeight(naturalH * s)
     }
     recompute()
     const ro = new ResizeObserver(recompute)
-    ro.observe(container)
+    ro.observe(area)
     ro.observe(content)
     return () => ro.disconnect()
-  }, [])
+  }, [compact])
 
   async function downloadImage() {
     if (!exportRef.current) return
@@ -457,22 +462,20 @@ function App() {
           </button>
         </div>
       </aside>
-      <main className="order-1 lg:landscape:order-2 flex-1 p-2 lg:landscape:p-6 lg:landscape:overflow-auto" onClick={() => { if (editMode && !compact) completeEditMode() }}>
-        {/* 좌석표 미리보기 = 다운로드 이미지 영역. 화면 너비에 맞춰 축소. compact에선 보기 전용 */}
-        <div>
-          {/* 가용 너비 측정용 컨테이너 (가로 넘침 방지 위해 overflow-hidden) */}
-          <div ref={fitContainerRef} className="w-full overflow-hidden" style={{ height: fitHeight }}>
-            {/* 화면 너비 초과 시 transform으로 축소 (추출엔 미반영) */}
-            <div
-              ref={fitContentRef}
-              className="inline-block"
-              style={{ transform: `scale(${fitScale})`, transformOrigin: 'top left' }}
-            >
-              {/* 점선 테두리는 미리보기용 — ref는 안쪽 카드에 있어 PNG에는 미포함 */}
-              <div className="inline-block rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 p-1">
-                <div ref={exportRef} className="inline-block bg-white rounded-lg p-6">
-                  <SeatMapPreview {...previewProps} viewOnly={compact} />
-                </div>
+      <main className="order-1 lg:landscape:order-2 flex-1 p-2 lg:landscape:p-6 lg:landscape:overflow-auto lg:landscape:h-screen" onClick={() => { if (editMode && !compact) completeEditMode() }}>
+        {/* 좌석표 미리보기 = 다운로드 이미지 영역. 영역에 맞춰 확대/축소. compact에선 보기 전용 */}
+        {/* 가용 영역 측정용 (좌우 분할 시 높이까지 채움) */}
+        <div ref={fitAreaRef} className="w-full lg:landscape:h-full overflow-hidden" style={{ height: compact ? fitHeight : undefined }}>
+          {/* transform으로 확대/축소 (추출엔 미반영) */}
+          <div
+            ref={fitContentRef}
+            className="inline-block"
+            style={{ transform: `scale(${fitScale})`, transformOrigin: 'top left' }}
+          >
+            {/* 점선 테두리는 미리보기용 — ref는 안쪽 카드에 있어 PNG에는 미포함 */}
+            <div className="inline-block rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 p-1">
+              <div ref={exportRef} className="inline-block bg-white rounded-lg p-6">
+                <SeatMapPreview {...previewProps} viewOnly={compact} />
               </div>
             </div>
           </div>
