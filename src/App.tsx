@@ -61,6 +61,27 @@ function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>(loadTheme)
   const importRef = useRef<HTMLInputElement>(null)
 
+  // 좁은 화면(모바일·세로 태블릿): 편집은 전체화면 오버레이로 분리
+  const [compact, setCompact] = useState(false)
+  const [mobileEditOpen, setMobileEditOpen] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 1023px), (orientation: portrait)')
+    const update = () => setCompact(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
+
+  // compact에서 편집 모드가 켜지면 전체화면 오버레이를 띄움
+  useEffect(() => {
+    if (compact && editMode !== null) setMobileEditOpen(true)
+  }, [compact, editMode])
+
+  function closeMobileEdit() {
+    completeEditMode()
+    setMobileEditOpen(false)
+  }
+
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(config)) } catch {}
   }, [config])
@@ -310,6 +331,27 @@ function App() {
     setEditMode(null)
   }
 
+  const previewProps = {
+    config,
+    editMode,
+    layoutPhase,
+    modeStartPos,
+    onEnterModeFrom: enterModeFrom,
+    onCancelEditMode: cancelEditMode,
+    onCompleteEditMode: completeEditMode,
+    onSetGridSize: setGridSize,
+    onToggleExcludedSeat: toggleExcludedSeat,
+    onExcludeSeats: excludeSeats,
+    onAddPrimeRange: addPrimeRange,
+    onRemovePrimeRange: removePrimeRange,
+    onAddWatchedRange: addWatchedRange,
+    onToggleWatchedSeat: toggleWatchedSeat,
+    onSetWatchedMemo: setWatchedMemo,
+    onToggleSightRow: toggleSightRow,
+    onToggleAisle: toggleRowAisle,
+    onToggleColAisle: toggleColAisle,
+  }
+
   return (
     <div className="flex flex-col lg:landscape:flex-row min-h-screen lg:landscape:h-screen bg-gray-50 dark:bg-gray-900">
       <aside className="order-2 lg:landscape:order-1 w-full lg:landscape:w-80 shrink-0 bg-white dark:bg-gray-800 border-t lg:landscape:border-t-0 lg:landscape:border-r border-gray-200 dark:border-gray-700 p-4 lg:landscape:p-6 lg:landscape:overflow-y-auto">
@@ -393,8 +435,17 @@ function App() {
           onCompleteEditMode={completeEditMode}
         />
       </aside>
-      <main className="order-1 lg:landscape:order-2 flex-1 p-4 lg:landscape:p-6 lg:landscape:overflow-auto" onClick={() => { if (editMode) completeEditMode() }}>
-        <div className="flex justify-end mb-4">
+      <main className="order-1 lg:landscape:order-2 flex-1 p-4 lg:landscape:p-6 lg:landscape:overflow-auto" onClick={() => { if (editMode && !compact) completeEditMode() }}>
+        <div className="flex justify-end gap-2 mb-4">
+          {compact && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setMobileEditOpen(true) }}
+              className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-sm rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            >
+              ✏️ 편집
+            </button>
+          )}
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); downloadImage() }}
@@ -404,7 +455,7 @@ function App() {
           </button>
         </div>
 
-        {/* 좌석표 — 편집 + 다운로드 이미지 영역 겸용. 화면 너비에 맞춰 축소 */}
+        {/* 좌석표 — 다운로드 이미지 영역. 화면 너비에 맞춰 축소. compact에선 보기 전용 */}
         <div>
           <div className="flex items-center gap-2 mb-2 text-sm text-gray-500 dark:text-gray-400">
             <span>📷 다운로드 이미지 영역</span>
@@ -421,31 +472,52 @@ function App() {
               {/* 점선 테두리는 미리보기용 — ref는 안쪽 카드에 있어 PNG에는 미포함 */}
               <div className="inline-block rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 p-1">
                 <div ref={exportRef} className="inline-block bg-white rounded-lg p-6">
-                  <SeatMapPreview
-            config={config}
-            editMode={editMode}
-            layoutPhase={layoutPhase}
-            modeStartPos={modeStartPos}
-            onEnterModeFrom={enterModeFrom}
-            onCancelEditMode={cancelEditMode}
-            onCompleteEditMode={completeEditMode}
-            onSetGridSize={setGridSize}
-            onToggleExcludedSeat={toggleExcludedSeat}
-            onExcludeSeats={excludeSeats}
-            onAddPrimeRange={addPrimeRange}
-            onRemovePrimeRange={removePrimeRange}
-            onAddWatchedRange={addWatchedRange}
-            onToggleWatchedSeat={toggleWatchedSeat}
-            onSetWatchedMemo={setWatchedMemo}
-            onToggleSightRow={toggleSightRow}
-            onToggleAisle={toggleRowAisle}
-            onToggleColAisle={toggleColAisle}
-                  />
+                  <SeatMapPreview {...previewProps} viewOnly={compact} />
                 </div>
               </div>
             </div>
           </div>
         </div>
+
+        {/* 모바일 전체화면 편집 오버레이 */}
+        {compact && mobileEditOpen && (
+          <div className="fixed inset-0 z-50 bg-gray-900/50 flex flex-col" onClick={closeMobileEdit}>
+            <div className="flex items-center justify-between gap-2 px-3 py-2 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => enterEditMode('layout')}
+                  className={`text-xs px-2 py-1.5 rounded border transition-colors ${editMode === 'layout' ? 'bg-indigo-500 text-white border-indigo-500' : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200'}`}
+                >
+                  레이아웃
+                </button>
+                <button
+                  type="button"
+                  onClick={enterGridResize}
+                  className="text-xs px-2 py-1.5 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-300"
+                >
+                  초기화
+                </button>
+                {editMode && (
+                  <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">좌석을 탭해 설정</span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={closeMobileEdit}
+                className="text-sm px-4 py-1.5 rounded bg-indigo-500 text-white font-medium"
+              >
+                완료
+              </button>
+            </div>
+            {/* 원본 크기 + 스크롤로 편집 */}
+            <div className="flex-1 overflow-auto p-4 bg-gray-50 dark:bg-gray-900" onClick={(e) => { e.stopPropagation(); if (editMode) completeEditMode() }}>
+              <div className="inline-block bg-white rounded-lg p-4" onClick={(e) => e.stopPropagation()}>
+                <SeatMapPreview {...previewProps} />
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   )

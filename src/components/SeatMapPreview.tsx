@@ -27,6 +27,7 @@ interface Props {
   onToggleColAisle: (col: number) => void
   onToggleExcludedSeat: (row: number, col: number) => void
   onExcludeSeats: (seats: { row: number; col: number }[]) => void
+  viewOnly?: boolean
 }
 
 interface SeatPos { row: number; col: number }
@@ -131,14 +132,17 @@ function pointInOrOnPolygon(row: number, col: number, vertices: SeatPos[]): bool
 }
 
 export default function SeatMapPreview({
-  config, editMode, layoutPhase, modeStartPos,
+  config, editMode: editModeProp, layoutPhase, modeStartPos,
   onEnterModeFrom,
   onCancelEditMode, onCompleteEditMode, onSetGridSize,
   onToggleExcludedSeat, onExcludeSeats,
   onAddPrimeRange, onRemovePrimeRange,
   onAddWatchedRange, onToggleWatchedSeat, onSetWatchedMemo, onToggleSightRow,
   onToggleAisle, onToggleColAisle,
+  viewOnly = false,
 }: Props) {
+  // viewOnly(보기 전용)일 땐 편집 상태를 무시해 깔끔한 이미지로만 렌더링
+  const editMode = viewOnly ? null : editModeProp
   const { rows, cols, rowAisles, colAisles } = config
   const SEAT = 32
   const AISLE = 12
@@ -323,6 +327,7 @@ export default function SeatMapPreview({
   }
 
   function handleSeatClick(row: number, col: number, e: React.MouseEvent) {
+    if (viewOnly) return
     if (suppressNextClickRef.current) { suppressNextClickRef.current = false; return }
     // layout 2단계: 좌석 클릭 = 폴리곤 제외 선택
     if (editMode === 'layout' && layoutPhase === 'edit') {
