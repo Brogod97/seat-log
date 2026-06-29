@@ -376,6 +376,17 @@ function App() {
           </div>
         </div>
 
+        {/* 모바일 편집 진입 버튼 */}
+        {compact && (
+          <button
+            type="button"
+            onClick={() => setMobileEditOpen(true)}
+            className="w-full mb-4 px-4 py-2.5 bg-indigo-500 text-white text-sm font-medium rounded hover:bg-indigo-600 transition-colors"
+          >
+            ✏️ 좌석표 편집
+          </button>
+        )}
+
         {/* 저장 / 불러오기 */}
         <div className="mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
           {/* 불러오기 드롭다운 */}
@@ -434,35 +445,23 @@ function App() {
           onCancelEditMode={cancelEditMode}
           onCompleteEditMode={completeEditMode}
         />
-      </aside>
-      <main className="order-1 lg:landscape:order-2 flex-1 p-4 lg:landscape:p-6 lg:landscape:overflow-auto" onClick={() => { if (editMode && !compact) completeEditMode() }}>
-        <div className="flex justify-end gap-2 mb-4">
-          {compact && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); setMobileEditOpen(true) }}
-              className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-sm rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-            >
-              ✏️ 편집
-            </button>
-          )}
+
+        {/* 이미지 다운로드 — 패널 하단 (모바일에선 페이지 맨 아래) */}
+        <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); downloadImage() }}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white text-sm rounded hover:bg-gray-700 transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-800 dark:bg-gray-100 text-white dark:text-gray-900 text-sm font-medium rounded hover:bg-gray-700 dark:hover:bg-white transition-colors"
           >
             ↓ 이미지 다운로드
           </button>
         </div>
-
-        {/* 좌석표 — 다운로드 이미지 영역. 화면 너비에 맞춰 축소. compact에선 보기 전용 */}
+      </aside>
+      <main className="order-1 lg:landscape:order-2 flex-1 p-2 lg:landscape:p-6 lg:landscape:overflow-auto" onClick={() => { if (editMode && !compact) completeEditMode() }}>
+        {/* 좌석표 미리보기 = 다운로드 이미지 영역. 화면 너비에 맞춰 축소. compact에선 보기 전용 */}
         <div>
-          <div className="flex items-center gap-2 mb-2 text-sm text-gray-500 dark:text-gray-400">
-            <span>📷 다운로드 이미지 영역</span>
-            <span className="text-xs text-gray-400 dark:text-gray-500 hidden sm:inline">(점선 안쪽이 그대로 PNG로 저장됩니다)</span>
-          </div>
-          {/* 가용 너비 측정용 컨테이너 */}
-          <div ref={fitContainerRef} className="w-full" style={{ height: fitHeight }}>
+          {/* 가용 너비 측정용 컨테이너 (가로 넘침 방지 위해 overflow-hidden) */}
+          <div ref={fitContainerRef} className="w-full overflow-hidden" style={{ height: fitHeight }}>
             {/* 화면 너비 초과 시 transform으로 축소 (추출엔 미반영) */}
             <div
               ref={fitContentRef}
