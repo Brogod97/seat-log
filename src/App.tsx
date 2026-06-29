@@ -103,6 +103,14 @@ function App() {
     if (saved) { setConfig({ ...DEFAULT_CONFIG, ...saved }); setEditMode(null) }
   }
 
+  function deleteSavedConfig(key: string) {
+    if (!confirm(`'${key.replace(/\|/g, ' ')}' 저장을 삭제할까요?`)) return
+    const next = { ...saves }
+    delete next[key]
+    setSaves(next)
+    writeSaves(next)
+  }
+
   function exportJson() {
     const blob = new Blob([JSON.stringify(saves, null, 2)], { type: 'application/json' })
     const a = document.createElement('a')
@@ -394,21 +402,32 @@ function App() {
 
         {/* 저장 / 불러오기 */}
         <div className="mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
-          {/* 불러오기 드롭다운 */}
+          {/* 저장된 좌석표 목록 (불러오기 / 삭제) */}
           {Object.keys(saves).length > 0 && (
             <div className="mb-2">
-              <select
-                className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-2 py-1.5 text-sm"
-                defaultValue=""
-                onChange={(e) => { if (e.target.value) loadSavedConfig(e.target.value) }}
-              >
-                <option value="">저장된 좌석표 불러오기</option>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">저장된 좌석표</p>
+              <div className="flex flex-col gap-1">
                 {Object.keys(saves).map((key) => (
-                  <option key={key} value={key}>
-                    {key.replace(/\|/g, ' ')}
-                  </option>
+                  <div key={key} className="flex items-center gap-1 rounded border border-gray-200 dark:border-gray-600">
+                    <button
+                      type="button"
+                      onClick={() => loadSavedConfig(key)}
+                      className="flex-1 text-left text-xs px-2 py-1.5 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-l truncate"
+                      title="불러오기"
+                    >
+                      {key.replace(/\|/g, ' ')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteSavedConfig(key)}
+                      className="px-2 py-1.5 text-gray-400 hover:text-red-500 text-sm"
+                      title="삭제"
+                    >
+                      ×
+                    </button>
+                  </div>
                 ))}
-              </select>
+              </div>
             </div>
           )}
 
