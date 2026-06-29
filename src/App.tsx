@@ -112,6 +112,32 @@ function App() {
   const [modeStartPos, setModeStartPos] = useState<{ row: number; col: number } | null>(null)
   const exportRef = useRef<HTMLDivElement>(null)
 
+  // 프리뷰를 화면 너비에 맞춰 축소 (다운로드 추출엔 영향 없음 — transform은 시각 효과)
+  const fitContainerRef = useRef<HTMLDivElement>(null)
+  const fitContentRef = useRef<HTMLDivElement>(null)
+  const [fitScale, setFitScale] = useState(1)
+  const [fitHeight, setFitHeight] = useState<number | undefined>(undefined)
+
+  useEffect(() => {
+    const container = fitContainerRef.current
+    const content = fitContentRef.current
+    if (!container || !content) return
+    function recompute() {
+      const c = fitContainerRef.current, el = fitContentRef.current
+      if (!c || !el) return
+      const natural = el.offsetWidth   // transform 영향 안 받는 레이아웃 너비
+      const avail = c.clientWidth
+      const s = natural > 0 ? Math.min(1, avail / natural) : 1
+      setFitScale(s)
+      setFitHeight(el.offsetHeight * s)
+    }
+    recompute()
+    const ro = new ResizeObserver(recompute)
+    ro.observe(container)
+    ro.observe(content)
+    return () => ro.disconnect()
+  }, [])
+
   async function downloadImage() {
     if (!exportRef.current) return
     // 편집 중이면 편집 UI(테두리·핸들)가 이미지에 섞이므로 먼저 종료
@@ -378,16 +404,24 @@ function App() {
           </button>
         </div>
 
-        {/* 좌석표 — 편집 + 다운로드 이미지 영역 겸용. 좁은 화면에선 가로 스크롤 */}
-        <div className="inline-block max-w-full overflow-x-auto">
+        {/* 좌석표 — 편집 + 다운로드 이미지 영역 겸용. 화면 너비에 맞춰 축소 */}
+        <div>
           <div className="flex items-center gap-2 mb-2 text-sm text-gray-500 dark:text-gray-400">
             <span>📷 다운로드 이미지 영역</span>
             <span className="text-xs text-gray-400 dark:text-gray-500 hidden sm:inline">(점선 안쪽이 그대로 PNG로 저장됩니다)</span>
           </div>
-          {/* 점선 테두리는 미리보기용 — ref는 안쪽 카드에 있어 PNG에는 미포함 */}
-          <div className="inline-block rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 p-1">
-            <div ref={exportRef} className="inline-block bg-white rounded-lg p-6">
-              <SeatMapPreview
+          {/* 가용 너비 측정용 컨테이너 */}
+          <div ref={fitContainerRef} className="w-full" style={{ height: fitHeight }}>
+            {/* 화면 너비 초과 시 transform으로 축소 (추출엔 미반영) */}
+            <div
+              ref={fitContentRef}
+              className="inline-block"
+              style={{ transform: `scale(${fitScale})`, transformOrigin: 'top left' }}
+            >
+              {/* 점선 테두리는 미리보기용 — ref는 안쪽 카드에 있어 PNG에는 미포함 */}
+              <div className="inline-block rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 p-1">
+                <div ref={exportRef} className="inline-block bg-white rounded-lg p-6">
+                  <SeatMapPreview
             config={config}
             editMode={editMode}
             layoutPhase={layoutPhase}
@@ -406,7 +440,9 @@ function App() {
             onToggleSightRow={toggleSightRow}
             onToggleAisle={toggleRowAisle}
             onToggleColAisle={toggleColAisle}
-              />
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
