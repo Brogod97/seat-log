@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from 'react'
 import { toPng } from 'html-to-image'
 import SeatMapForm from './components/SeatMapForm'
 import SeatMapPreview from './components/SeatMapPreview'
-import SeatMapExport from './components/SeatMapExport'
 import type { SeatMapConfig, Range } from './types'
 
 export type EditMode = 'layout' | 'prime' | 'watched' | null
@@ -98,6 +97,8 @@ function App() {
 
   async function downloadImage() {
     if (!exportRef.current) return
+    // 편집 중이면 편집 UI(테두리·핸들)가 이미지에 섞이므로 먼저 종료
+    if (editMode) { completeEditMode(); await new Promise((r) => requestAnimationFrame(r)) }
     const title = [config.brand, config.branch, config.screen].filter(Boolean).join(' ') || '좌석표'
     const dataUrl = await toPng(exportRef.current, { pixelRatio: 2 })
     const a = document.createElement('a')
@@ -350,29 +351,37 @@ function App() {
           </button>
         </div>
 
-        <SeatMapPreview
-          config={config}
-          editMode={editMode}
-          layoutPhase={layoutPhase}
-          modeStartPos={modeStartPos}
-          onEnterModeFrom={enterModeFrom}
-          onCancelEditMode={cancelEditMode}
-          onCompleteEditMode={completeEditMode}
-          onSetGridSize={setGridSize}
-          onToggleExcludedSeat={toggleExcludedSeat}
-          onExcludeSeats={excludeSeats}
-          onAddPrimeRange={addPrimeRange}
-          onRemovePrimeRange={removePrimeRange}
-          onAddWatchedRange={addWatchedRange}
-          onToggleWatchedSeat={toggleWatchedSeat}
-          onSetWatchedMemo={setWatchedMemo}
-          onToggleSightRow={toggleSightRow}
-          onToggleAisle={toggleRowAisle}
-          onToggleColAisle={toggleColAisle}
-        />
-        {/* 이미지 추출용 숨김 렌더링 */}
-        <div style={{ position: 'absolute', left: -9999, top: 0, pointerEvents: 'none' }}>
-          <SeatMapExport ref={exportRef} config={config} />
+        {/* 좌석표 — 편집 + 다운로드 이미지 영역 겸용 */}
+        <div className="inline-block">
+          <div className="flex items-center gap-2 mb-2 text-sm text-gray-500">
+            <span>📷 다운로드 이미지 영역</span>
+            <span className="text-xs text-gray-400">(점선 안쪽이 그대로 PNG로 저장됩니다)</span>
+          </div>
+          {/* 점선 테두리는 미리보기용 — ref는 안쪽 카드에 있어 PNG에는 미포함 */}
+          <div className="inline-block rounded-lg border-2 border-dashed border-gray-300 p-1">
+            <div ref={exportRef} className="inline-block bg-white rounded-lg p-6">
+              <SeatMapPreview
+            config={config}
+            editMode={editMode}
+            layoutPhase={layoutPhase}
+            modeStartPos={modeStartPos}
+            onEnterModeFrom={enterModeFrom}
+            onCancelEditMode={cancelEditMode}
+            onCompleteEditMode={completeEditMode}
+            onSetGridSize={setGridSize}
+            onToggleExcludedSeat={toggleExcludedSeat}
+            onExcludeSeats={excludeSeats}
+            onAddPrimeRange={addPrimeRange}
+            onRemovePrimeRange={removePrimeRange}
+            onAddWatchedRange={addWatchedRange}
+            onToggleWatchedSeat={toggleWatchedSeat}
+            onSetWatchedMemo={setWatchedMemo}
+            onToggleSightRow={toggleSightRow}
+            onToggleAisle={toggleRowAisle}
+            onToggleColAisle={toggleColAisle}
+              />
+            </div>
+          </div>
         </div>
       </main>
     </div>
