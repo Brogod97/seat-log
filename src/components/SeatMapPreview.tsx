@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, forwardRef } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, forwardRef } from 'react'
 import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
 import type { SeatMapConfig, Range, ExitSide } from '../types'
@@ -746,6 +746,21 @@ interface SeatPopupProps {
 const SeatPopup = forwardRef<HTMLDivElement, SeatPopupProps>(
   ({ popup, config, centerCols, onEnterModeFrom, onRemovePrimeRange, onToggleWatchedSeat, onSetWatchedMemo, onToggleSightRow, onToggleExcludedSeat, onToggleExit, onHoverHint, onClose }, ref) => {
     const { row, col, x, y } = popup
+    const innerRef = useRef<HTMLDivElement | null>(null)
+    const [pos, setPos] = useState({ left: x + 8, top: y + 8 })
+
+    // 화면 밖으로 넘치면 위/왼쪽으로 뒤집고 뷰포트 안으로 클램프
+    useLayoutEffect(() => {
+      const el = innerRef.current
+      if (!el) return
+      const { width, height } = el.getBoundingClientRect()
+      const M = 8
+      let left = x + 8
+      let top = y + 8
+      if (left + width > window.innerWidth - M) left = Math.max(M, x - width - 8)
+      if (top + height > window.innerHeight - M) top = Math.max(M, y - height - 8)
+      setPos({ left, top })
+    }, [x, y])
 
     const primeMatches = config.primeRanges
       .map((r, i) => inRange(row, col, r) ? { r, i } : null)
@@ -799,8 +814,12 @@ const SeatPopup = forwardRef<HTMLDivElement, SeatPopupProps>(
 
     return (
       <div
-        ref={ref}
-        style={{ position: 'fixed', left: x + 8, top: y + 8, zIndex: 50 }}
+        ref={(node) => {
+          innerRef.current = node
+          if (typeof ref === 'function') ref(node)
+          else if (ref) (ref as { current: HTMLDivElement | null }).current = node
+        }}
+        style={{ position: 'fixed', left: pos.left, top: pos.top, zIndex: 50 }}
         className="bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-40 text-sm"
         onMouseLeave={() => onHoverHint(null)}
       >
