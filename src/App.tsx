@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
+import type { CSSProperties } from 'react'
 import { toPng } from 'html-to-image'
 import SeatMapForm from './components/SeatMapForm'
 import SeatMapPreview from './components/SeatMapPreview'
 import type { SeatMapConfig, Range, ExitSide } from './types'
+import { themeFor } from './theme'
 
 export type EditMode = 'layout' | 'prime' | 'watched' | null
 
@@ -380,8 +382,13 @@ function App() {
     onToggleExit: toggleExit,
   }
 
+  const brandTheme = themeFor(config.brand)
+
   return (
-    <div className="flex flex-col lg:landscape:flex-row min-h-screen lg:landscape:h-screen bg-gray-50 dark:bg-gray-900">
+    <div
+      className="flex flex-col lg:landscape:flex-row min-h-screen lg:landscape:h-screen bg-gray-50 dark:bg-gray-900"
+      style={{ '--accent': brandTheme.accent, '--accent-hover': brandTheme.accentHover } as CSSProperties}
+    >
       <aside className="order-2 lg:landscape:order-1 w-full lg:landscape:w-80 shrink-0 bg-white dark:bg-gray-800 border-t lg:landscape:border-t-0 lg:landscape:border-r border-gray-200 dark:border-gray-700 p-4 lg:landscape:p-6 lg:landscape:overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h1 className="flex items-center gap-2 text-lg font-bold text-gray-800 dark:text-gray-100">
@@ -406,17 +413,6 @@ function App() {
             </button>
           </div>
         </div>
-
-        {/* 모바일 편집 진입 버튼 */}
-        {compact && (
-          <button
-            type="button"
-            onClick={() => setMobileEditOpen(true)}
-            className="w-full mb-4 px-4 py-2.5 bg-indigo-500 text-white text-sm font-medium rounded hover:bg-indigo-600 transition-colors"
-          >
-            ✏️ 좌석표 편집
-          </button>
-        )}
 
         {/* 저장 / 불러오기 */}
         <div className="mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
@@ -454,7 +450,7 @@ function App() {
             <button
               type="button"
               onClick={saveCurrentConfig}
-              className="flex-1 text-xs px-2 py-1.5 bg-gray-800 text-white rounded hover:bg-gray-700 transition-colors"
+              className="flex-1 text-xs px-2 py-1.5 btn-accent rounded font-medium"
             >
               현재 저장
             </button>
@@ -493,7 +489,7 @@ function App() {
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); downloadImage() }}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-800 dark:bg-gray-100 text-white dark:text-gray-900 text-sm font-medium rounded hover:bg-gray-700 dark:hover:bg-white transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 btn-accent text-sm font-semibold rounded-lg"
           >
             ↓ 이미지 다운로드
           </button>
@@ -518,6 +514,17 @@ function App() {
           </div>
         </div>
 
+        {/* 모바일: 프리뷰 바로 아래 편집 진입 버튼 (시안 2a) */}
+        {compact && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setMobileEditOpen(true) }}
+            className="w-full mt-3 px-4 py-3 btn-accent text-sm font-semibold rounded-xl"
+          >
+            좌석표 편집
+          </button>
+        )}
+
         {/* 모바일 전체화면 편집 오버레이 */}
         {compact && mobileEditOpen && (
           <div className="fixed inset-0 z-50 bg-gray-900/50 flex flex-col" onClick={closeMobileEdit}>
@@ -526,7 +533,7 @@ function App() {
                 <button
                   type="button"
                   onClick={() => enterEditMode('layout')}
-                  className={`text-xs px-2 py-1.5 rounded border transition-colors ${editMode === 'layout' ? 'bg-indigo-500 text-white border-indigo-500' : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200'}`}
+                  className={`text-xs px-2 py-1.5 rounded border transition-colors ${editMode === 'layout' ? 'btn-accent border-transparent' : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200'}`}
                 >
                   레이아웃
                 </button>
@@ -544,7 +551,7 @@ function App() {
               <button
                 type="button"
                 onClick={closeMobileEdit}
-                className="text-sm px-4 py-1.5 rounded bg-indigo-500 text-white font-medium"
+                className="text-sm px-4 py-1.5 rounded btn-accent font-medium"
               >
                 완료
               </button>

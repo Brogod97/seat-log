@@ -136,7 +136,7 @@ function pointInOrOnPolygon(row: number, col: number, vertices: SeatPos[]): bool
 
 // 출입구 선: 좌석의 바깥 변에 문 위치를 표시
 function exitLineStyle(side: ExitSide): CSSProperties {
-  const C = '#059669', T = 4, OUT = -5
+  const C = '#4b5563', T = 4, OUT = -5
   const base: CSSProperties = { position: 'absolute', background: C, borderRadius: 2, zIndex: 5 }
   if (side === 'left') return { ...base, left: OUT, top: 2, bottom: 2, width: T }
   if (side === 'right') return { ...base, right: OUT, top: 2, bottom: 2, width: T }
@@ -287,7 +287,7 @@ export default function SeatMapPreview({
     }
 
     // excluded seats always shown as excluded
-    if (isExcluded) return { bg: 'bg-white', ring: 'ring-1 ring-gray-300', highlight, excluded: true }
+    if (isExcluded) return { bg: 'bg-gray-50', ring: 'ring-1 ring-gray-200', highlight, excluded: true }
 
     // prime / watched 범위 미리보기
     if (editMode === 'prime' || editMode === 'watched') {
@@ -377,6 +377,24 @@ export default function SeatMapPreview({
       : null
   const ringClass = editMode ? (MODE_RING[editMode] ?? '') : ''
 
+  // 행 라벨 열 (그리드 좌우 양쪽, 시안 2a) — 행/복도 높이를 그리드와 동일하게 미러링
+  const rowLabelCol = (
+    <div style={{ display: 'inline-block', userSelect: 'none' }} aria-hidden="true">
+      {Array.from({ length: rows }, (_, ri) => {
+        const row = ri + 1
+        const isAisleRow = rowAisleSet.has(row)
+        return (
+          <div key={ri}>
+            <div style={{ height: SEAT, width: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ fontSize: 10, fontWeight: 600 }} className="text-gray-400">{indexToLabel(ri)}</span>
+            </div>
+            {row < rows && <div style={{ height: isAisleRow ? AISLE : normalGap }} />}
+          </div>
+        )
+      })}
+    </div>
+  )
+
   return (
     <div className="relative">
       {/* 제목 */}
@@ -388,11 +406,14 @@ export default function SeatMapPreview({
 
       {/* 정보 */}
       <p className="text-sm text-gray-500 mb-3">
-        {rows}행 × {cols}열
+        {rows} × {cols}
         <span className="mx-2 text-gray-300">|</span>
         총 {rows * cols - config.excludedSeats.length}석
         {centerCols.length > 0 && (
-          <span className="ml-2 text-blue-500">중앙열 {centerCols.join(', ')}열</span>
+          <>
+            <span className="mx-2 text-gray-300">|</span>
+            <span className="text-accent font-medium">중앙열 {centerCols.join(', ')}</span>
+          </>
         )}
       </p>
 
@@ -415,7 +436,7 @@ export default function SeatMapPreview({
       )}
 
       {/* 범례 */}
-      <div className="flex gap-4 mb-4 text-xs text-gray-700">
+      <div className="flex gap-4 mb-4 text-xs text-gray-500">
         {[
           { color: 'bg-blue-300', label: '중앙열' },
           { color: 'bg-green-300', label: '시선일치행' },
@@ -427,7 +448,9 @@ export default function SeatMapPreview({
           </span>
         ))}
         {config.exits.length > 0 && (
-          <span className="flex items-center gap-1">🚪 출입구</span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-3 h-1.5 rounded-sm bg-gray-500" />출입구
+          </span>
         )}
       </div>
 
@@ -458,25 +481,33 @@ export default function SeatMapPreview({
           }
         }}
       >
-        {/* 스크린 (항상 맨 위, 중앙) */}
-        <div
-          style={{
-            width: Math.round(gridPixelWidth * 0.5),
-            height: 22,
-            margin: '0 auto 14px',
-            borderRadius: 4,
-            background: '#d1d5db',
-            color: '#4b5563',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 11,
-            letterSpacing: 4,
-            fontWeight: 600,
-          }}
-        >
-          SCREEN
+        {/* 스크린 — 얇은 라인 + 레터스페이스 텍스트 (시안 2a) */}
+        <div style={{ width: '100%', marginBottom: 18 }}>
+          <div style={{ width: '58%', margin: '0 auto' }}>
+            <div
+              style={{
+                height: 3,
+                borderRadius: 2,
+                background: 'linear-gradient(to right, transparent, #d1d5db 18%, #d1d5db 82%, transparent)',
+              }}
+            />
+            <div
+              style={{
+                textAlign: 'center',
+                fontSize: 11,
+                letterSpacing: 7,
+                color: '#9ca3af',
+                marginTop: 8,
+                fontWeight: 500,
+              }}
+            >
+              SCREEN
+            </div>
+          </div>
         </div>
+        {/* 행 라벨(A~) 좌우 + 그리드 */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+          {rowLabelCol}
         <div style={{ display: 'inline-block', userSelect: 'none', position: 'relative' }}>
           {/* 폴리곤 SVG 오버레이 — inner div 기준으로 절대 위치 */}
           {editMode === 'layout' && layoutPhase === 'edit' && polyPreviewVertices.length >= 2 && (
@@ -543,7 +574,7 @@ export default function SeatMapPreview({
                           onClick={(e) => { if (!isRangeMode) handleSeatClick(row, col, e) }}
                         >
                           {excluded
-                            ? <span style={{ fontSize: 11, lineHeight: 1 }}>╳</span>
+                            ? <span style={{ fontSize: 10, lineHeight: 1 }} className="text-gray-300">×</span>
                             : <span style={{ fontSize: 9, lineHeight: 1 }}>{indexToLabel(ri)}{col}</span>
                           }
                           {exitSides.map((side) => (
@@ -616,6 +647,8 @@ export default function SeatMapPreview({
               </div>
             )
           })}
+        </div>
+          {rowLabelCol}
         </div>
       </div>
 
@@ -779,7 +812,7 @@ const SeatPopup = forwardRef<HTMLDivElement, SeatPopupProps>(
     ].filter(Boolean) as { side: ExitSide; label: string }[]
     const hasExit = (side: ExitSide) => config.exits.some((s) => s.row === row && s.col === col && s.side === side)
 
-    type Item = { label: string; action: () => void; hint?: HighlightHint; danger?: boolean }
+    type Item = { label: string; action: () => void; hint?: HighlightHint; danger?: boolean; dot?: string }
     type Divider = { divider: true }
     type InfoItem = { info: true; label: string }
     type Row = Item | Divider | InfoItem
@@ -796,11 +829,12 @@ const SeatPopup = forwardRef<HTMLDivElement, SeatPopupProps>(
     ].filter(Boolean) as Item[]
 
     const setItems: Row[] = [
-      { label: isSightRow ? '시선일치행 해제' : '시선일치행 설정', action: () => { onToggleSightRow(row); onClose() } },
-      { label: '명당 범위 설정', action: () => { onClose(); onEnterModeFrom('prime', { row, col }) } },
-      { label: '실관람 설정', action: () => { onClose(); onEnterModeFrom('watched', { row, col }) } },
+      { label: isSightRow ? '시선일치행 해제' : '시선일치행 설정', dot: 'bg-green-400', action: () => { onToggleSightRow(row); onClose() } },
+      { label: '명당 범위 설정', dot: 'bg-red-300', action: () => { onClose(); onEnterModeFrom('prime', { row, col }) } },
+      { label: '실관람 좌석 설정', dot: 'bg-yellow-400', action: () => { onClose(); onEnterModeFrom('watched', { row, col }) } },
       ...exitSideOptions.map(({ side, label }) => ({
-        label: `🚪 출입구(${label}) ${hasExit(side) ? '해제' : '표시'}`,
+        label: `출입구(${label}) ${hasExit(side) ? '해제' : '표시'}`,
+        dot: 'bg-gray-500',
         action: () => { onToggleExit(row, col, side); onClose() },
       })),
       isExcluded ? { label: '제외 해제', action: () => { onToggleExcludedSeat(row, col); onClose() } } : null,
@@ -820,11 +854,12 @@ const SeatPopup = forwardRef<HTMLDivElement, SeatPopupProps>(
           else if (ref) (ref as { current: HTMLDivElement | null }).current = node
         }}
         style={{ position: 'fixed', left: pos.left, top: pos.top, zIndex: 50 }}
-        className="bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-40 text-sm"
+        className="bg-white border border-gray-200 rounded-xl shadow-lg py-1.5 min-w-44 text-sm"
         onMouseLeave={() => onHoverHint(null)}
       >
-        <div className="px-3 py-1.5 text-xs font-medium text-gray-500 border-b border-gray-100">
-          {indexToLabel(row - 1)}{col}
+        <div className="px-3.5 py-2 border-b border-gray-100 flex items-baseline gap-1.5">
+          <span className="text-sm font-bold text-gray-800">{indexToLabel(row - 1)}{col}</span>
+          <span className="text-xs text-gray-400">좌석 설정</span>
         </div>
         {isWatched && (
           <div className="px-3 py-2 border-b border-gray-100">
@@ -847,12 +882,13 @@ const SeatPopup = forwardRef<HTMLDivElement, SeatPopupProps>(
               type="button"
               onClick={item.action}
               onMouseEnter={() => item.hint && onHoverHint(item.hint)}
-              className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
+              className={`w-full text-left px-3.5 py-2 text-xs transition-colors flex items-center gap-2 ${
                 item.danger
                   ? 'text-red-600 hover:bg-red-50'
                   : 'text-gray-700 hover:bg-gray-50'
               }`}
             >
+              {item.dot && <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${item.dot}`} />}
               {item.label}
             </button>
           )

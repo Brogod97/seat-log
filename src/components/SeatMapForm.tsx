@@ -20,7 +20,7 @@ const COLOR_STYLES: Record<BtnColor, { active: string; idle: string }> = {
   red:    { active: 'bg-red-500 text-white border-red-500',       idle: 'text-red-600 border-red-300 hover:bg-red-50' },
   yellow: { active: 'bg-yellow-500 text-white border-yellow-500', idle: 'text-yellow-700 border-yellow-300 hover:bg-yellow-50' },
   green:  { active: 'bg-green-500 text-white border-green-500',   idle: 'text-green-700 border-green-300 hover:bg-green-50' },
-  indigo: { active: 'bg-indigo-500 text-white border-indigo-500', idle: 'text-indigo-600 border-indigo-300 hover:bg-indigo-50' },
+  indigo: { active: 'btn-accent border-transparent', idle: 'text-accent border-accent-soft hover:bg-accent-soft' },
   gray:   { active: 'bg-gray-500 text-white border-gray-500',     idle: 'text-gray-600 border-gray-300 hover:bg-gray-50' },
 }
 
@@ -101,13 +101,13 @@ export default function SeatMapForm({
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{config.rows}행 × {config.cols}열</p>
         <div className="flex flex-wrap gap-1">
           {config.rowAisles.map((v) => (
-            <span key={`r${v}`} className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-800 text-xs rounded">
+            <span key={`r${v}`} className="inline-flex items-center gap-1 px-2 py-0.5 bg-accent-soft text-accent text-xs rounded font-medium">
               {indexToLabel(v - 1)}행↓
               <button type="button" onClick={() => update({ rowAisles: config.rowAisles.filter((x) => x !== v) })} className="hover:text-red-600">×</button>
             </span>
           ))}
           {config.colAisles.map((v) => (
-            <span key={`c${v}`} className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-800 text-xs rounded">
+            <span key={`c${v}`} className="inline-flex items-center gap-1 px-2 py-0.5 bg-accent-soft text-accent text-xs rounded font-medium">
               {v}열→
               <button type="button" onClick={() => update({ colAisles: config.colAisles.filter((x) => x !== v) })} className="hover:text-red-600">×</button>
             </span>
@@ -119,8 +119,8 @@ export default function SeatMapForm({
             </span>
           )}
           {config.exits.length > 0 && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-800 text-xs rounded">
-              🚪 출입구 {config.exits.length}
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">
+              출입구 {config.exits.length}곳
               <button type="button" onClick={() => update({ exits: [] })} className="hover:text-red-600">×</button>
             </span>
           )}
@@ -275,7 +275,7 @@ function TheaterSelector({
               onClick={() => handleBrandChange(b)}
               className={`px-3 py-1 rounded-full text-xs border transition-colors ${
                 config.brand === b
-                  ? 'bg-gray-800 dark:bg-gray-100 text-white dark:text-gray-900 border-gray-800 dark:border-gray-100'
+                  ? 'btn-accent border-transparent font-medium'
                   : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-gray-500'
               }`}
             >

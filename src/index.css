@@ -3,6 +3,32 @@
 /* 클래스 기반 다크모드: <html class="dark"> 일 때 dark: 변형 활성화 */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* 브랜드 액센트 (App에서 --accent 변수를 브랜드별로 주입) */
+:root {
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+}
+
+.btn-accent {
+  background-color: var(--accent);
+  color: #fff;
+  transition: background-color 0.15s;
+}
+.btn-accent:hover {
+  background-color: var(--accent-hover);
+}
+
+/* Tailwind variant(hover: 등)와 함께 쓸 수 있도록 @utility로 정의 */
+@utility text-accent {
+  color: var(--accent);
+}
+@utility bg-accent-soft {
+  background-color: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+@utility border-accent-soft {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
 * {
   box-sizing: border-box;
 }
