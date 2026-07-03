@@ -460,10 +460,8 @@ export default function SeatMapPreview({
         <GhostGrid
           currentRows={config.rows}
           currentCols={config.cols}
-          hoverPos={hoverPos}
-          onHover={(pos) => setHoverPos(pos)}
-          onConfirm={(rows, cols) => onSetGridSize(rows, cols)}
-          onLeave={() => setHoverPos(null)}
+          onApply={(rows, cols) => onSetGridSize(rows, cols)}
+          onCancel={onCancelEditMode}
         />
         </div>
       )}
@@ -677,84 +675,146 @@ export default function SeatMapPreview({
   )
 }
 
-// --- Ghost Grid (그리드 크기 선택) ---
+// --- Ghost Grid (그리드 크기 선택 — 드래그 사각형 + 코너 핸들, 시안 4a/5a) ---
 function GhostGrid({
   currentRows,
   currentCols,
-  hoverPos,
-  onHover,
-  onConfirm,
-  onLeave,
+  onApply,
+  onCancel,
 }: {
   currentRows: number
   currentCols: number
-  hoverPos: SeatPos | null
-  onHover: (pos: SeatPos) => void
-  onConfirm: (rows: number, cols: number) => void
-  onLeave: () => void
+  onApply: (rows: number, cols: number) => void
+  onCancel: () => void
 }) {
-  const hoverRow = hoverPos?.row ?? currentRows
-  const hoverCol = hoverPos?.col ?? currentCols
+  const [sel, setSel] = useState({ rows: currentRows, cols: currentCols })
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const draggingRef = useRef(false)
 
-  const LABEL_W = 20  // 행 레이블 너비
+  const LABEL_W = 20        // 행 레이블 너비
+  const PITCH = GHOST_CELL + 1  // 셀 간격 포함 피치
+
+  function cellFromEvent(e: React.PointerEvent): { row: number; col: number } | null {
+    const rect = bodyRef.current?.getBoundingClientRect()
+    if (!rect) return null
+    const col = Math.floor((e.clientX - rect.left) / PITCH) + 1
+    const row = Math.floor((e.clientY - rect.top) / PITCH) + 1
+    return {
+      row: Math.min(Math.max(row, 1), GHOST_MAX_ROWS),
+      col: Math.min(Math.max(col, 1), GHOST_MAX_COLS),
+    }
+  }
+  function handleDown(e: React.PointerEvent) {
+    draggingRef.current = true
+    e.currentTarget.setPointerCapture(e.pointerId)
+    const c = cellFromEvent(e)
+    if (c) setSel({ rows: c.row, cols: c.col })
+  }
+  function handleMove(e: React.PointerEvent) {
+    if (!draggingRef.current) return
+    const c = cellFromEvent(e)
+    if (c) setSel({ rows: c.row, cols: c.col })
+  }
+  function handleUp() {
+    draggingRef.current = false
+  }
+
+  const selW = sel.cols * PITCH - 1
+  const selH = sel.rows * PITCH - 1
+  const handleBase: CSSProperties = {
+    position: 'absolute', width: 10, height: 10, borderRadius: '50%',
+    background: '#fff', border: '2px solid var(--accent)',
+    transform: 'translate(-50%, -50%)', pointerEvents: 'none',
+  }
 
   return (
-    <div onMouseLeave={onLeave}>
-      <div className="text-sm font-medium text-indigo-700 mb-2">
-        {indexToLabel(hoverRow - 1)}{hoverCol} 까지 — {hoverRow}행 × {hoverCol}열
+    <div>
+      {/* 미니 스크린 라인 */}
+      <div style={{ paddingLeft: LABEL_W + 1, width: GHOST_MAX_COLS * PITCH + LABEL_W, marginBottom: 12 }}>
+        <div style={{ width: '55%', margin: '0 auto' }}>
+          <div style={{ height: 2, borderRadius: 1, background: 'linear-gradient(to right, transparent, #d1d5db 20%, #d1d5db 80%, transparent)' }} />
+          <div style={{ textAlign: 'center', fontSize: 10, letterSpacing: 5, color: '#9ca3af', marginTop: 5, fontWeight: 500 }}>SCREEN</div>
+        </div>
       </div>
-      <div style={{ display: 'inline-block', userSelect: 'none' }}>
-        {/* 상단 열 번호 축 */}
-        <div style={{ display: 'flex', gap: 1, marginBottom: 3, paddingLeft: LABEL_W + 1 }}>
-          {Array.from({ length: GHOST_MAX_COLS }, (_, ci) => {
-            const col = ci + 1
-            const show = col === 1 || col % 5 === 0 || col === hoverCol
-            return (
-              <div
-                key={ci}
-                style={{ width: GHOST_CELL, flexShrink: 0, textAlign: 'center' }}
-                className={`text-xs ${col <= hoverCol ? 'text-indigo-500' : 'text-gray-300'}`}
-              >
-                {show ? col : ''}
-              </div>
-            )
-          })}
+
+      <div style={{ display: 'flex', userSelect: 'none' }}>
+        {/* 좌측 행 레이블 */}
+        <div style={{ width: LABEL_W, flexShrink: 0 }}>
+          {Array.from({ length: GHOST_MAX_ROWS }, (_, ri) => (
+            <div
+              key={ri}
+              style={{ height: GHOST_CELL, marginBottom: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 5 }}
+              className={`text-xs ${ri + 1 <= sel.rows ? 'text-accent font-medium' : 'text-gray-300 dark:text-gray-600'}`}
+            >
+              {indexToLabel(ri)}
+            </div>
+          ))}
         </div>
 
-        {/* 행 */}
-        {Array.from({ length: GHOST_MAX_ROWS }, (_, ri) => {
-          const row = ri + 1
-          return (
-            <div key={ri} style={{ display: 'flex', gap: 1, marginBottom: 1, alignItems: 'center' }}>
-              {/* 좌측 행 레이블 */}
-              <div
-                style={{ width: LABEL_W, flexShrink: 0, textAlign: 'right', paddingRight: 4 }}
-                className={`text-xs ${row <= hoverRow ? 'text-indigo-500' : 'text-gray-300'}`}
-              >
-                {indexToLabel(ri)}
-              </div>
-              {Array.from({ length: GHOST_MAX_COLS }, (_, ci) => {
-                const col = ci + 1
-                const inSelected = row <= hoverRow && col <= hoverCol
-                const isBorder = row === hoverRow || col === hoverCol
-                return (
-                  <div
-                    key={ci}
-                    style={{ width: GHOST_CELL, height: GHOST_CELL, flexShrink: 0 }}
-                    className={[
-                      'rounded-sm cursor-pointer transition-colors',
-                      inSelected
-                        ? isBorder ? 'bg-indigo-400' : 'bg-indigo-200'
-                        : 'bg-gray-100 hover:bg-gray-200',
-                    ].join(' ')}
-                    onMouseEnter={() => onHover({ row, col })}
-                    onClick={() => onConfirm(row, col)}
-                  />
-                )
-              })}
+        {/* 셀 영역 + 선택 오버레이 */}
+        <div
+          ref={bodyRef}
+          style={{ position: 'relative', touchAction: 'none', cursor: 'crosshair' }}
+          onPointerDown={handleDown}
+          onPointerMove={handleMove}
+          onPointerUp={handleUp}
+        >
+          {Array.from({ length: GHOST_MAX_ROWS }, (_, ri) => (
+            <div key={ri} style={{ display: 'flex', gap: 1, marginBottom: 1 }}>
+              {Array.from({ length: GHOST_MAX_COLS }, (_, ci) => (
+                <div
+                  key={ci}
+                  style={{ width: GHOST_CELL, height: GHOST_CELL, flexShrink: 0 }}
+                  className="rounded-sm bg-gray-100 dark:bg-gray-700/60"
+                />
+              ))}
             </div>
-          )
-        })}
+          ))}
+
+          {/* 선택 사각형 */}
+          <div
+            style={{
+              position: 'absolute', left: 0, top: 0, width: selW, height: selH,
+              border: '2px solid var(--accent)',
+              background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+              borderRadius: 4, pointerEvents: 'none',
+            }}
+          >
+            <span style={{ ...handleBase, left: 0, top: 0 }} />
+            <span style={{ ...handleBase, left: '100%', top: 0 }} />
+            <span style={{ ...handleBase, left: 0, top: '100%' }} />
+            <span style={{ ...handleBase, left: '100%', top: '100%', width: 14, height: 14, background: 'var(--accent)' }} />
+            {/* 크기 배지 */}
+            <span
+              style={{
+                position: 'absolute', left: '100%', top: '100%', marginLeft: 10, marginTop: 8,
+                whiteSpace: 'nowrap', background: '#111827', color: '#fff',
+                fontSize: 12, fontWeight: 600, padding: '3px 8px', borderRadius: 6,
+              }}
+            >
+              {sel.rows} × {sel.cols}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* 적용 / 취소 */}
+      <div className="flex items-center gap-2 mt-5">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-4 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+        >
+          취소
+        </button>
+        <button
+          type="button"
+          onClick={() => onApply(sel.rows, sel.cols)}
+          className="px-5 py-2 text-sm rounded-lg btn-accent font-medium"
+        >
+          이 크기로 적용
+        </button>
+        <span className="text-xs text-gray-400 ml-1">드래그해서 행·열 범위를 지정하세요</span>
       </div>
     </div>
   )
