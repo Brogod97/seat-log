@@ -409,7 +409,7 @@ function App() {
               onClick={resetConfig}
               className="text-xs px-2 py-1 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded border border-gray-200 dark:border-gray-600 hover:border-red-200 transition-colors"
             >
-              초기화
+              ↺ 초기화
             </button>
           </div>
         </div>

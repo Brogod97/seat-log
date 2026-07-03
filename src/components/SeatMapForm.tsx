@@ -285,59 +285,59 @@ function TheaterSelector({
         </div>
       </div>
 
-      {/* 지점 */}
-      <div className="mb-3">
-        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">지점</label>
-        <select
-          value={isBranchCustom ? CUSTOM : config.branch}
-          onChange={(e) => handleBranchChange(e.target.value)}
-          disabled={!config.brand}
-          className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-2 py-1.5 text-sm disabled:bg-gray-50 dark:disabled:bg-gray-800 disabled:text-gray-400"
-        >
-          <option value="">선택</option>
-          {topBranches.length > 0 && (
-            <optgroup label="자주 선택">
-              {topBranches.map((b) => <option key={`top-${b}`} value={b}>{b}</option>)}
+      {/* 지점 / 상영관 — 나란히 (시안 2a) */}
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">지점</label>
+          <select
+            value={isBranchCustom ? CUSTOM : config.branch}
+            onChange={(e) => handleBranchChange(e.target.value)}
+            disabled={!config.brand}
+            className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-2 py-1.5 text-sm disabled:bg-gray-50 dark:disabled:bg-gray-800 disabled:text-gray-400"
+          >
+            <option value="">선택</option>
+            {topBranches.length > 0 && (
+              <optgroup label="자주 선택">
+                {topBranches.map((b) => <option key={`top-${b}`} value={b}>{b}</option>)}
+              </optgroup>
+            )}
+            <optgroup label="전체">
+              {branches.map((b) => <option key={b} value={b}>{b}</option>)}
             </optgroup>
+          </select>
+          {isBranchCustom && (
+            <input
+              type="text"
+              value={config.branch === CUSTOM ? '' : config.branch}
+              onChange={(e) => update({ branch: e.target.value })}
+              placeholder="지점명 입력"
+              className="w-full mt-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-2 py-1.5 text-sm"
+              autoFocus
+            />
           )}
-          <optgroup label="전체">
-            {branches.map((b) => <option key={b} value={b}>{b}</option>)}
-          </optgroup>
-        </select>
-        {isBranchCustom && (
-          <input
-            type="text"
-            value={config.branch === CUSTOM ? '' : config.branch}
-            onChange={(e) => update({ branch: e.target.value })}
-            placeholder="지점명 입력"
-            className="w-full mt-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-2 py-1.5 text-sm"
-            autoFocus
-          />
-        )}
-      </div>
-
-      {/* 상영관 */}
-      <div className="mb-3">
-        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">상영관</label>
-        <select
-          value={isScreenCustom ? CUSTOM : config.screen}
-          onChange={(e) => handleScreenChange(e.target.value)}
-          disabled={!config.brand}
-          className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-2 py-1.5 text-sm disabled:bg-gray-50 dark:disabled:bg-gray-800 disabled:text-gray-400"
-        >
-          <option value="">선택</option>
-          {screens.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
-        {isScreenCustom && (
-          <input
-            type="text"
-            value={config.screen === CUSTOM ? '' : config.screen}
-            onChange={(e) => update({ screen: e.target.value })}
-            placeholder="상영관명 입력"
-            className="w-full mt-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-2 py-1.5 text-sm"
-            autoFocus
-          />
-        )}
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">상영관</label>
+          <select
+            value={isScreenCustom ? CUSTOM : config.screen}
+            onChange={(e) => handleScreenChange(e.target.value)}
+            disabled={!config.brand}
+            className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-2 py-1.5 text-sm disabled:bg-gray-50 dark:disabled:bg-gray-800 disabled:text-gray-400"
+          >
+            <option value="">선택</option>
+            {screens.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          {isScreenCustom && (
+            <input
+              type="text"
+              value={config.screen === CUSTOM ? '' : config.screen}
+              onChange={(e) => update({ screen: e.target.value })}
+              placeholder="상영관명 입력"
+              className="w-full mt-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-2 py-1.5 text-sm"
+              autoFocus
+            />
+          )}
+        </div>
       </div>
 
     </div>
