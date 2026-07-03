@@ -216,12 +216,22 @@ export default function SeatMapPreview({
     return h
   })()
 
-  // 폴리곤 편집 모드(레이아웃 2단계)를 벗어나면 미완성 꼭짓점 정리
+  // 레이아웃 2단계 안의 구역 모드: 복도 / 제외구역 (시안 4b/5b)
+  const [zoneMode, setZoneMode] = useState<'aisle' | 'excluded'>('aisle')
+  function switchZoneMode(m: 'aisle' | 'excluded') {
+    setZoneMode(m)
+    setPolyVertices([])  // 모드 전환 시 미완성 꼭짓점 정리
+  }
+
+  // 폴리곤 편집 모드(레이아웃 2단계)를 벗어나면 미완성 꼭짓점 정리 + 구역 모드 초기화
   const wasPolyModeRef = useRef(false)
   useEffect(() => {
     const isPolyModeNow = editMode === 'layout' && layoutPhase === 'edit'
     if (wasPolyModeRef.current && !isPolyModeNow) {
       setPolyVertices([])
+    }
+    if (!wasPolyModeRef.current && isPolyModeNow) {
+      setZoneMode('aisle')
     }
     wasPolyModeRef.current = isPolyModeNow
     prevEditModeRef.current = editMode
@@ -274,7 +284,7 @@ export default function SeatMapPreview({
     const isExcluded = config.excludedSeats.some((s) => s.row === row && s.col === col)
 
     // excluded 폴리곤 미리보기 (excluded 모드 또는 layout 2단계)
-    const isPolyMode = editMode === 'layout' && layoutPhase === 'edit'
+    const isPolyMode = editMode === 'layout' && layoutPhase === 'edit' && zoneMode === 'excluded'
     if (isPolyMode) {
       const isFirstVertex = polyVertices[0]?.row === row && polyVertices[0]?.col === col
       const isVertex = polyVertices.some((v) => v.row === row && v.col === col)
@@ -342,8 +352,9 @@ export default function SeatMapPreview({
   function handleSeatClick(row: number, col: number, e: React.MouseEvent) {
     if (viewOnly) return
     if (suppressNextClickRef.current) { suppressNextClickRef.current = false; return }
-    // layout 2단계: 좌석 클릭 = 폴리곤 제외 선택
+    // layout 2단계: 제외구역 모드에서만 좌석 클릭 = 폴리곤 꼭짓점
     if (editMode === 'layout' && layoutPhase === 'edit') {
+      if (zoneMode !== 'excluded') return
       const first = polyVertices[0]
       if (polyVertices.length >= 3 && first && first.row === row && first.col === col) {
         // 폴리곤 확정
@@ -417,21 +428,45 @@ export default function SeatMapPreview({
         )}
       </p>
 
-      {/* 편집 모드 안내 */}
-      {editMode && modeInfo && (
+      {/* 편집 모드 안내: layout 2단계는 복도/제외구역 토글 (시안 4b/5b) */}
+      {editMode === 'layout' && layoutPhase === 'edit' ? (
+        <div className="flex items-center gap-2 mb-3 flex-wrap" onClick={(e) => e.stopPropagation()}>
+          <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => switchZoneMode('aisle')}
+              className={`text-xs px-3 py-1.5 transition-colors ${zoneMode === 'aisle' ? 'bg-accent-soft text-accent font-medium' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+            >
+              복도
+            </button>
+            <button
+              type="button"
+              onClick={() => switchZoneMode('excluded')}
+              className={`text-xs px-3 py-1.5 transition-colors border-l border-gray-200 ${zoneMode === 'excluded' ? 'bg-accent-soft text-accent font-medium' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+            >
+              제외구역
+            </button>
+          </div>
+          <span className="text-xs text-gray-400">
+            {zoneMode === 'aisle'
+              ? '행·열 사이 틈을 클릭해 복도 지정'
+              : polyVertices.length === 0
+                ? '좌석을 눌러 꼭짓점 시작'
+                : `꼭짓점 ${polyVertices.length}개 — 첫 꼭짓점을 다시 눌러 확정`}
+          </span>
+          <button
+            type="button"
+            onClick={() => onCancelEditMode()}
+            className="text-xs text-accent hover:underline"
+          >
+            ↩ 크기 재설정
+          </button>
+        </div>
+      ) : editMode && modeInfo && (
         <div className="flex items-center gap-2 mb-3">
           <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
             {modeInfo}
           </span>
-          {editMode === 'layout' && layoutPhase === 'edit' && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onCancelEditMode() }}
-              className="text-xs text-indigo-500 hover:text-indigo-700"
-            >
-              ↩ 크기 재설정
-            </button>
-          )}
         </div>
       )}
 
@@ -507,8 +542,45 @@ export default function SeatMapPreview({
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
           {rowLabelCol}
         <div style={{ display: 'inline-block', userSelect: 'none', position: 'relative' }}>
+          {/* 복도 파란 띠 (레이아웃 편집 중, 시안 4b) */}
+          {editMode === 'layout' && layoutPhase === 'edit' && (
+            <>
+              {colAisles.filter((c) => c < cols).map((c) => (
+                <div
+                  key={`cband-${c}`}
+                  style={{
+                    position: 'absolute',
+                    left: seatPixelCenter(1, c).x + SEAT / 2 + 2,
+                    top: -4,
+                    width: AISLE,
+                    height: gridPixelHeight + 8,
+                    background: 'rgba(99, 102, 241, 0.28)',
+                    borderRadius: 4,
+                    pointerEvents: 'none',
+                    zIndex: 4,
+                  }}
+                />
+              ))}
+              {rowAisles.filter((r) => r < rows).map((r) => (
+                <div
+                  key={`rband-${r}`}
+                  style={{
+                    position: 'absolute',
+                    top: seatPixelCenter(r, 1).y + SEAT / 2,
+                    left: -4,
+                    height: AISLE,
+                    width: gridPixelWidth + 8,
+                    background: 'rgba(99, 102, 241, 0.28)',
+                    borderRadius: 4,
+                    pointerEvents: 'none',
+                    zIndex: 4,
+                  }}
+                />
+              ))}
+            </>
+          )}
           {/* 폴리곤 SVG 오버레이 — inner div 기준으로 절대 위치 */}
-          {editMode === 'layout' && layoutPhase === 'edit' && polyPreviewVertices.length >= 2 && (
+          {editMode === 'layout' && layoutPhase === 'edit' && zoneMode === 'excluded' && polyPreviewVertices.length >= 2 && (
             <svg
               style={{
                 position: 'absolute', top: 0, left: 0,
@@ -581,30 +653,31 @@ export default function SeatMapPreview({
                         </div>
 
                         {col < cols && (() => {
-                          const isColAisleMode = editMode === 'layout' && layoutPhase === 'edit'
-                          const isHovered = isColAisleMode && hoverAisleCol === col
-                          const w = isAisleCol ? AISLE : isColAisleMode ? 8 : 2
+                          // 폭(w)은 레이아웃 편집 내내 8px 유지(좌표 일관성), 상호작용은 복도 모드에서만
+                          const isLayoutEditPhase = editMode === 'layout' && layoutPhase === 'edit'
+                          const canEditAisle = isLayoutEditPhase && zoneMode === 'aisle'
+                          const isHovered = canEditAisle && hoverAisleCol === col
+                          const w = isAisleCol ? AISLE : isLayoutEditPhase ? 8 : 2
                           return (
                             <div
                               key={`ca-${ri}-${ci}`}
                               style={{ width: w, flexShrink: 0, position: 'relative' }}
                               className={[
                                 'transition-all',
-                                isColAisleMode ? 'cursor-col-resize' : '',
+                                canEditAisle ? 'cursor-col-resize' : '',
                               ].filter(Boolean).join(' ')}
-                              onMouseEnter={() => isColAisleMode && setHoverAisleCol(col)}
+                              onMouseEnter={() => canEditAisle && setHoverAisleCol(col)}
                               onMouseLeave={() => setHoverAisleCol(null)}
-                              onClick={(e) => { if (isColAisleMode) { e.stopPropagation(); onToggleColAisle(col) } }}
+                              onClick={(e) => { if (canEditAisle) { e.stopPropagation(); onToggleColAisle(col) } }}
                             >
-                              {isColAisleMode && (
+                              {isHovered && (
                                 <div style={{
                                   position: 'absolute',
                                   top: 0, bottom: 0,
                                   left: '50%', transform: 'translateX(-50%)',
-                                  width: isAisleCol || isHovered ? w : 2,
-                                  background: isHovered ? '#6366f1' : isAisleCol ? '#a5b4fc' : 'transparent',
+                                  width: w,
+                                  background: 'color-mix(in srgb, #6366f1 55%, transparent)',
                                   borderRadius: 2,
-                                  transition: 'all 0.1s',
                                 }} />
                               )}
                             </div>
@@ -616,27 +689,27 @@ export default function SeatMapPreview({
                 </div>
 
                 {row < rows && (() => {
-                  const isRowAisleMode = editMode === 'layout' && layoutPhase === 'edit'
-                  const isHovered = isRowAisleMode && hoverAisleRow === row
-                  const h = isAisleRow ? AISLE : isRowAisleMode ? 8 : 2
+                  const isLayoutEditPhase = editMode === 'layout' && layoutPhase === 'edit'
+                  const canEditAisle = isLayoutEditPhase && zoneMode === 'aisle'
+                  const isHovered = canEditAisle && hoverAisleRow === row
+                  const h = isAisleRow ? AISLE : isLayoutEditPhase ? 8 : 2
                   return (
                     <div
                       key={`ra-${ri}`}
                       style={{ height: h, position: 'relative' }}
-                      className={isRowAisleMode ? 'cursor-row-resize transition-all' : 'transition-all'}
-                      onMouseEnter={() => isRowAisleMode && setHoverAisleRow(row)}
+                      className={canEditAisle ? 'cursor-row-resize transition-all' : 'transition-all'}
+                      onMouseEnter={() => canEditAisle && setHoverAisleRow(row)}
                       onMouseLeave={() => setHoverAisleRow(null)}
-                      onClick={(e) => { if (isRowAisleMode) { e.stopPropagation(); onToggleAisle(row) } }}
+                      onClick={(e) => { if (canEditAisle) { e.stopPropagation(); onToggleAisle(row) } }}
                     >
-                      {isRowAisleMode && (
+                      {isHovered && (
                         <div style={{
                           position: 'absolute',
                           left: 0, right: 0,
                           top: '50%', transform: 'translateY(-50%)',
-                          height: isAisleRow || isHovered ? h : 2,
-                          background: isHovered ? '#6366f1' : isAisleRow ? '#a5b4fc' : 'transparent',
+                          height: h,
+                          background: 'color-mix(in srgb, #6366f1 55%, transparent)',
                           borderRadius: 2,
-                          transition: 'all 0.1s',
                         }} />
                       )}
                     </div>
