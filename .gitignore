@@ -14,6 +14,7 @@ dist-ssr
 
 # 개인 기획 문서 (공개 레포 제외)
 docs/
+design/
 
 # Editor directories and files
 .vscode/*
