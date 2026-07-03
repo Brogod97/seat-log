@@ -385,24 +385,7 @@ function App() {
       <aside className="order-2 lg:landscape:order-1 w-full lg:landscape:w-80 shrink-0 bg-white dark:bg-gray-800 border-t lg:landscape:border-t-0 lg:landscape:border-r border-gray-200 dark:border-gray-700 p-4 lg:landscape:p-6 lg:landscape:overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h1 className="flex items-center gap-2 text-lg font-bold text-gray-800 dark:text-gray-100">
-            <svg width="22" height="22" viewBox="0 0 32 32" className="shrink-0" aria-hidden="true">
-              <rect width="32" height="32" rx="7" fill="#4f46e5" />
-              <rect x="9" y="7" width="14" height="2.4" rx="1.2" fill="#ffffff" opacity="0.9" />
-              <g fill="#ffffff" opacity="0.85">
-                <rect x="7" y="13" width="4" height="4" rx="1.2" />
-                <rect x="12.5" y="13" width="4" height="4" rx="1.2" />
-                <rect x="18" y="13" width="4" height="4" rx="1.2" />
-                <rect x="23.5" y="13" width="4" height="4" rx="1.2" />
-                <rect x="7" y="19" width="4" height="4" rx="1.2" />
-                <rect x="12.5" y="19" width="4" height="4" rx="1.2" />
-                <rect x="23.5" y="19" width="4" height="4" rx="1.2" />
-                <rect x="7" y="25" width="4" height="4" rx="1.2" />
-                <rect x="12.5" y="25" width="4" height="4" rx="1.2" />
-                <rect x="18" y="25" width="4" height="4" rx="1.2" />
-                <rect x="23.5" y="25" width="4" height="4" rx="1.2" />
-              </g>
-              <rect x="18" y="19" width="4" height="4" rx="1.2" fill="#fbbf24" />
-            </svg>
+            <img src="/logo.svg" width="24" height="24" alt="" className="shrink-0 rounded-md" />
             좌석표 생성기
           </h1>
           <div className="flex items-center gap-1">
