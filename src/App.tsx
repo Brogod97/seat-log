@@ -67,6 +67,9 @@ function App() {
   // 좁은 화면(모바일·세로 태블릿): 편집은 전체화면 오버레이로 분리
   const [compact, setCompact] = useState(false)
   const [mobileEditOpen, setMobileEditOpen] = useState(false)
+  // 모바일 오버레이 화면 (시안 3): 좌석 설정 / 레이아웃 / 복도·제외 / 출입구
+  const [mobileScreen, setMobileScreen] = useState<'seat' | 'layout' | 'zone' | 'exit'>('seat')
+  const [layoutPhase, setLayoutPhase] = useState<'size' | 'edit'>('size')
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 1023px), (orientation: portrait)')
     const update = () => setCompact(mq.matches)
@@ -75,14 +78,25 @@ function App() {
     return () => mq.removeEventListener('change', update)
   }, [])
 
-  // compact에서 편집 모드가 켜지면 전체화면 오버레이를 띄움
+  // compact에서 편집 모드가 켜지면 전체화면 오버레이를 띄우고 화면을 동기화
   useEffect(() => {
-    if (compact && editMode !== null) setMobileEditOpen(true)
-  }, [compact, editMode])
+    if (compact && editMode !== null) {
+      setMobileEditOpen(true)
+      if (editMode === 'layout') setMobileScreen(layoutPhase === 'size' ? 'layout' : 'zone')
+    }
+  }, [compact, editMode, layoutPhase])
+
+  // 오버레이 내 화면 전환 동기화: 크기 적용 → 복도·제외, 편집 종료 → 좌석 설정
+  useEffect(() => {
+    if (!mobileEditOpen) return
+    if (mobileScreen === 'layout' && editMode === 'layout' && layoutPhase === 'edit') setMobileScreen('zone')
+    if ((mobileScreen === 'layout' || mobileScreen === 'zone') && editMode === null) setMobileScreen('seat')
+  }, [mobileEditOpen, mobileScreen, editMode, layoutPhase])
 
   function closeMobileEdit() {
     completeEditMode()
     setMobileEditOpen(false)
+    setMobileScreen('seat')
   }
 
   useEffect(() => {
@@ -252,7 +266,6 @@ function App() {
     })
   }
 
-  const [layoutPhase, setLayoutPhase] = useState<'size' | 'edit'>('size')
 
   function addPrimeRange(range: Range) {
     setConfig((c) => ({ ...c, primeRanges: [...c.primeRanges, range] }))
@@ -525,45 +538,99 @@ function App() {
           </button>
         )}
 
-        {/* 모바일 전체화면 편집 오버레이 */}
-        {compact && mobileEditOpen && (
-          <div className="fixed inset-0 z-50 bg-gray-900/50 flex flex-col" onClick={closeMobileEdit}>
-            <div className="flex items-center justify-between gap-2 px-3 py-2 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center gap-1.5">
+        {/* 모바일 전체화면 편집 오버레이 (시안 3: 헤더 + 카드 + 바텀시트) */}
+        {compact && mobileEditOpen && (() => {
+          const subtitle = [config.brand, config.branch, config.screen].filter(Boolean).join(' ')
+          const SCREEN_TITLES = { seat: '좌석 설정', layout: '레이아웃 편집', zone: '복도·제외구역', exit: '출입구' } as const
+          const handleBack = () => {
+            if (mobileScreen === 'layout' || mobileScreen === 'zone') cancelEditMode()  // 동기화 효과가 seat으로 되돌림
+            else if (mobileScreen === 'exit') setMobileScreen('seat')
+            else closeMobileEdit()
+          }
+          return (
+            <div className="fixed inset-0 z-50 bg-gray-100 dark:bg-gray-900 flex flex-col">
+              {/* 헤더 */}
+              <div className="flex items-center gap-3 px-3 py-2.5 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                 <button
                   type="button"
-                  onClick={() => enterEditMode('layout')}
-                  className={`text-xs px-2 py-1.5 rounded border transition-colors ${editMode === 'layout' ? 'btn-accent border-transparent' : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200'}`}
+                  onClick={handleBack}
+                  className="w-9 h-9 flex items-center justify-center rounded-xl bg-accent-soft text-accent text-lg shrink-0"
+                  aria-label="뒤로"
                 >
-                  레이아웃
+                  ‹
                 </button>
-                <button
-                  type="button"
-                  onClick={enterGridResize}
-                  className="text-xs px-2 py-1.5 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-300"
-                >
-                  초기화
-                </button>
-                {editMode && (
-                  <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">좌석을 탭해 설정</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-bold text-gray-800 dark:text-gray-100">{SCREEN_TITLES[mobileScreen]}</div>
+                  {subtitle && <div className="text-xs text-gray-400 truncate">{subtitle}</div>}
+                </div>
+                {mobileScreen === 'seat' && (
+                  <button type="button" onClick={closeMobileEdit} className="text-sm px-3 py-1.5 rounded-lg btn-accent font-medium">완료</button>
+                )}
+                {mobileScreen === 'zone' && (
+                  <button type="button" onClick={completeEditMode} className="text-sm px-3 py-1.5 rounded-lg btn-accent font-medium">완료</button>
+                )}
+                {mobileScreen === 'exit' && (
+                  <button type="button" onClick={() => setMobileScreen('seat')} className="text-sm px-3 py-1.5 rounded-lg btn-accent font-medium">완료</button>
+                )}
+                {mobileScreen === 'layout' && (
+                  <button type="button" onClick={enterGridResize} className="text-sm px-3 py-1.5 rounded-lg text-accent font-medium">초기화</button>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={closeMobileEdit}
-                className="text-sm px-4 py-1.5 rounded btn-accent font-medium"
-              >
-                완료
-              </button>
-            </div>
-            {/* 원본 크기 + 스크롤로 편집 */}
-            <div className="flex-1 overflow-auto p-4 bg-gray-50 dark:bg-gray-900" onClick={(e) => { e.stopPropagation(); if (editMode) completeEditMode() }}>
-              <div className="inline-block bg-white rounded-lg p-4" onClick={(e) => e.stopPropagation()}>
-                <SeatMapPreview {...previewProps} />
+
+              {/* 좌석표 카드 (원본 크기 + 스크롤) */}
+              <div className="flex-1 overflow-auto p-3">
+                <div className="inline-block bg-white rounded-2xl p-4 min-w-full">
+                  <SeatMapPreview
+                    {...previewProps}
+                    seatMenuAsSheet
+                    exitTapMode={mobileScreen === 'exit'}
+                  />
+                </div>
+              </div>
+
+              {/* 바텀시트 */}
+              <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 rounded-t-2xl px-4 pt-3 pb-6 shadow-2xl">
+                <div className="mx-auto w-10 h-1 rounded-full bg-gray-200 dark:bg-gray-600 mb-3" />
+                {mobileScreen === 'seat' && (
+                  <>
+                    <p className="text-xs text-gray-400 mb-3">좌석을 탭해 시선일치행·명당·실관람을 설정하세요.</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button type="button" onClick={() => { enterGridResize(); setMobileScreen('layout') }} className="px-2 py-2.5 text-xs rounded-xl border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-medium">레이아웃 편집</button>
+                      <button type="button" onClick={() => { enterEditMode('layout'); setMobileScreen('zone') }} className="px-2 py-2.5 text-xs rounded-xl border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-medium">복도·제외구역</button>
+                      <button type="button" onClick={() => setMobileScreen('exit')} className="px-2 py-2.5 text-xs rounded-xl border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-medium">출입구</button>
+                    </div>
+                  </>
+                )}
+                {mobileScreen === 'layout' && (
+                  <>
+                    <div className="text-sm font-bold text-gray-800 dark:text-gray-100 mb-1">선택 범위</div>
+                    <p className="text-xs text-gray-400">그리드를 드래그해 행·열 범위를 지정하세요. 아래 '이 크기로 적용' 버튼으로 확정해요.</p>
+                  </>
+                )}
+                {mobileScreen === 'zone' && (
+                  <>
+                    <div className="text-sm font-bold text-gray-800 dark:text-gray-100 mb-1">구역 지정</div>
+                    <p className="text-xs text-gray-400 mb-3">복도는 열/행 사이를, 제외구역은 좌석 중앙을 이어 다각형으로 지정해요.</p>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={cancelEditMode} className="flex-1 px-4 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300">취소</button>
+                      <button type="button" onClick={completeEditMode} className="flex-1 px-4 py-2.5 text-sm rounded-xl btn-accent font-medium">완료</button>
+                    </div>
+                  </>
+                )}
+                {mobileScreen === 'exit' && (
+                  <>
+                    <div className="flex items-baseline justify-between mb-1">
+                      <span className="text-sm font-bold text-gray-800 dark:text-gray-100">출입구 위치</span>
+                      <span className="text-sm font-bold text-accent">{config.exits.length}곳</span>
+                    </div>
+                    <p className="text-xs text-gray-400 mb-3">그리드 가장자리 좌석을 탭해 출입구 위치를 표시하세요.</p>
+                    <button type="button" onClick={() => setMobileScreen('seat')} className="w-full px-4 py-2.5 text-sm rounded-xl btn-accent font-medium">완료</button>
+                  </>
+                )}
               </div>
             </div>
-          </div>
-        )}
+          )
+        })()}
       </main>
     </div>
   )

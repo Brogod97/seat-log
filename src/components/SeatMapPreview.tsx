@@ -31,6 +31,8 @@ interface Props {
   onExcludeSeats: (seats: { row: number; col: number }[]) => void
   onToggleExit: (row: number, col: number, side: ExitSide) => void
   viewOnly?: boolean
+  seatMenuAsSheet?: boolean  // 모바일: 좌석 메뉴를 바텀시트로 (시안 5d)
+  exitTapMode?: boolean      // 모바일: 가장자리 탭으로 출입구 토글 (시안 5c)
 }
 
 interface SeatPos { row: number; col: number }
@@ -153,6 +155,8 @@ export default function SeatMapPreview({
   onAddWatchedRange, onToggleWatchedSeat, onSetWatchedMemo, onToggleSightRow,
   onToggleAisle, onToggleColAisle, onToggleExit,
   viewOnly = false,
+  seatMenuAsSheet = false,
+  exitTapMode = false,
 }: Props) {
   // viewOnly(보기 전용)일 땐 편집 상태를 무시해 깔끔한 이미지로만 렌더링
   const editMode = viewOnly ? null : editModeProp
@@ -352,6 +356,19 @@ export default function SeatMapPreview({
   function handleSeatClick(row: number, col: number, e: React.MouseEvent) {
     if (viewOnly) return
     if (suppressNextClickRef.current) { suppressNextClickRef.current = false; return }
+    // 출입구 탭 모드: 가장자리 좌석 탭으로 출입구 토글 (시안 5c)
+    if (exitTapMode) {
+      const sides: ExitSide[] = []
+      if (row === 1) sides.push('top')
+      if (row === rows) sides.push('bottom')
+      if (col === 1) sides.push('left')
+      if (col === cols) sides.push('right')
+      if (sides.length === 0) return
+      const existing = config.exits.filter((s) => s.row === row && s.col === col)
+      if (existing.length > 0) existing.forEach((s) => onToggleExit(row, col, s.side))
+      else onToggleExit(row, col, sides[0])
+      return
+    }
     // layout 2단계: 제외구역 모드에서만 좌석 클릭 = 폴리곤 꼭짓점
     if (editMode === 'layout' && layoutPhase === 'edit') {
       if (zoneMode !== 'excluded') return
@@ -741,6 +758,7 @@ export default function SeatMapPreview({
           onToggleExit={onToggleExit}
           onHoverHint={setHighlightHint}
           onClose={() => { setPopup(null); setHighlightHint(null) }}
+          sheet={seatMenuAsSheet}
         />,
         document.body
       )}
@@ -907,16 +925,18 @@ interface SeatPopupProps {
   onToggleExit: (row: number, col: number, side: ExitSide) => void
   onHoverHint: (hint: HighlightHint) => void
   onClose: () => void
+  sheet?: boolean  // 바텀시트로 렌더 (모바일)
 }
 
 const SeatPopup = forwardRef<HTMLDivElement, SeatPopupProps>(
-  ({ popup, config, centerCols, onEnterModeFrom, onRemovePrimeRange, onToggleWatchedSeat, onSetWatchedMemo, onToggleSightRow, onToggleExcludedSeat, onToggleExit, onHoverHint, onClose }, ref) => {
+  ({ popup, config, centerCols, onEnterModeFrom, onRemovePrimeRange, onToggleWatchedSeat, onSetWatchedMemo, onToggleSightRow, onToggleExcludedSeat, onToggleExit, onHoverHint, onClose, sheet = false }, ref) => {
     const { row, col, x, y } = popup
     const innerRef = useRef<HTMLDivElement | null>(null)
     const [pos, setPos] = useState({ left: x + 8, top: y + 8 })
 
-    // 화면 밖으로 넘치면 위/왼쪽으로 뒤집고 뷰포트 안으로 클램프
+    // 화면 밖으로 넘치면 위/왼쪽으로 뒤집고 뷰포트 안으로 클램프 (시트 모드에선 불필요)
     useLayoutEffect(() => {
+      if (sheet) return
       const el = innerRef.current
       if (!el) return
       const { width, height } = el.getBoundingClientRect()
@@ -986,12 +1006,15 @@ const SeatPopup = forwardRef<HTMLDivElement, SeatPopupProps>(
           if (typeof ref === 'function') ref(node)
           else if (ref) (ref as { current: HTMLDivElement | null }).current = node
         }}
-        style={{ position: 'fixed', left: pos.left, top: pos.top, zIndex: 50 }}
-        className="bg-white border border-gray-200 rounded-xl shadow-lg py-1.5 min-w-44 text-sm"
+        style={sheet ? { position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 60 } : { position: 'fixed', left: pos.left, top: pos.top, zIndex: 50 }}
+        className={sheet
+          ? 'bg-white border-t border-gray-200 rounded-t-2xl shadow-2xl pt-2 pb-6 px-2 text-sm'
+          : 'bg-white border border-gray-200 rounded-xl shadow-lg py-1.5 min-w-44 text-sm'}
         onMouseLeave={() => onHoverHint(null)}
       >
-        <div className="px-3.5 py-2 border-b border-gray-100 flex items-baseline gap-1.5">
-          <span className="text-sm font-bold text-gray-800">{indexToLabel(row - 1)}{col}</span>
+        {sheet && <div className="mx-auto w-10 h-1 rounded-full bg-gray-200 mb-2" />}
+        <div className={`border-b border-gray-100 flex items-baseline gap-1.5 ${sheet ? 'px-4 py-2.5' : 'px-3.5 py-2'}`}>
+          <span className={`font-bold text-gray-800 ${sheet ? 'text-base' : 'text-sm'}`}>{indexToLabel(row - 1)}{col}</span>
           <span className="text-xs text-gray-400">좌석 설정</span>
         </div>
         {isWatched && (
@@ -1015,7 +1038,9 @@ const SeatPopup = forwardRef<HTMLDivElement, SeatPopupProps>(
               type="button"
               onClick={item.action}
               onMouseEnter={() => item.hint && onHoverHint(item.hint)}
-              className={`w-full text-left px-3.5 py-2 text-xs transition-colors flex items-center gap-2 ${
+              className={`w-full text-left transition-colors flex items-center gap-2 ${
+                sheet ? 'px-4 py-3 text-sm rounded-lg' : 'px-3.5 py-2 text-xs'
+              } ${
                 item.danger
                   ? 'text-red-600 hover:bg-red-50'
                   : 'text-gray-700 hover:bg-gray-50'
