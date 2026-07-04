@@ -72,6 +72,8 @@ function App() {
   const [layoutPhase, setLayoutPhase] = useState<'size' | 'edit'>('size')
   // 모바일 레이아웃 편집: 고스트 그리드 선택값 미러 (바텀시트 표시·적용용)
   const [ghostSel, setGhostSel] = useState({ rows: 10, cols: 20 })
+  // 모바일 복도·제외구역 모드 (바텀시트 토글로 제어)
+  const [mobileZoneMode, setMobileZoneMode] = useState<'aisle' | 'excluded'>('aisle')
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 1023px), (orientation: portrait)')
     const update = () => setCompact(mq.matches)
@@ -588,6 +590,9 @@ function App() {
                     exitTapMode={mobileScreen === 'exit'}
                     ghostHideActions
                     onGhostSelChange={(rows, cols) => setGhostSel({ rows, cols })}
+                    zoneMode={mobileZoneMode}
+                    onZoneModeChange={setMobileZoneMode}
+                    hideZoneToolbar
                   />
                 </div>
               </div>
@@ -621,7 +626,27 @@ function App() {
                 {mobileScreen === 'zone' && (
                   <>
                     <div className="text-sm font-bold text-gray-800 dark:text-gray-100 mb-1">구역 지정</div>
-                    <p className="text-xs text-gray-400 mb-3">복도는 열/행 사이를, 제외구역은 좌석 중앙을 이어 다각형으로 지정해요.</p>
+                    <p className="text-xs text-gray-400 mb-3">
+                      {mobileZoneMode === 'aisle'
+                        ? '행·열 사이 틈을 탭해 복도를 지정해요.'
+                        : '좌석을 탭해 꼭짓점을 잇고, 첫 꼭짓점을 다시 탭하면 제외구역이 확정돼요.'}
+                    </p>
+                    <div className="flex gap-2 mb-2">
+                      <button
+                        type="button"
+                        onClick={() => setMobileZoneMode('aisle')}
+                        className={`flex-1 px-4 py-2.5 text-sm rounded-xl border font-medium ${mobileZoneMode === 'aisle' ? 'bg-accent-soft text-accent border-accent-soft' : 'border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-300'}`}
+                      >
+                        복도
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMobileZoneMode('excluded')}
+                        className={`flex-1 px-4 py-2.5 text-sm rounded-xl border font-medium ${mobileZoneMode === 'excluded' ? 'bg-accent-soft text-accent border-accent-soft' : 'border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-300'}`}
+                      >
+                        제외구역
+                      </button>
+                    </div>
                     <div className="flex gap-2">
                       <button type="button" onClick={cancelEditMode} className="flex-1 px-4 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300">취소</button>
                       <button type="button" onClick={completeEditMode} className="flex-1 px-4 py-2.5 text-sm rounded-xl btn-accent font-medium">완료</button>

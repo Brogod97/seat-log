@@ -35,6 +35,9 @@ interface Props {
   exitTapMode?: boolean      // 모바일: 가장자리 탭으로 출입구 토글 (시안 5c)
   ghostHideActions?: boolean // 모바일: 고스트 그리드 버튼을 바텀시트에서 렌더
   onGhostSelChange?: (rows: number, cols: number) => void
+  zoneMode?: 'aisle' | 'excluded'            // 모바일: 바텀시트에서 제어
+  onZoneModeChange?: (m: 'aisle' | 'excluded') => void
+  hideZoneToolbar?: boolean                  // 모바일: 카드 안 토글 숨김 (바텀시트가 대신)
 }
 
 interface SeatPos { row: number; col: number }
@@ -161,6 +164,9 @@ export default function SeatMapPreview({
   exitTapMode = false,
   ghostHideActions = false,
   onGhostSelChange,
+  zoneMode: zoneModeProp,
+  onZoneModeChange,
+  hideZoneToolbar = false,
 }: Props) {
   // viewOnly(보기 전용)일 땐 편집 상태를 무시해 깔끔한 이미지로만 렌더링
   const editMode = viewOnly ? null : editModeProp
@@ -225,11 +231,17 @@ export default function SeatMapPreview({
   })()
 
   // 레이아웃 2단계 안의 구역 모드: 복도 / 제외구역 (시안 4b/5b)
-  const [zoneMode, setZoneMode] = useState<'aisle' | 'excluded'>('aisle')
+  // 모바일에선 부모(바텀시트)가 제어(zoneModeProp), 그 외엔 내부 상태
+  const [zoneModeInternal, setZoneModeInternal] = useState<'aisle' | 'excluded'>('aisle')
+  const zoneMode = zoneModeProp ?? zoneModeInternal
   function switchZoneMode(m: 'aisle' | 'excluded') {
-    setZoneMode(m)
-    setPolyVertices([])  // 모드 전환 시 미완성 꼭짓점 정리
+    if (onZoneModeChange) onZoneModeChange(m)
+    else setZoneModeInternal(m)
   }
+  // 모드가 어느 경로로 바뀌든(내부 토글·바텀시트) 미완성 꼭짓점 정리
+  useEffect(() => {
+    setPolyVertices([])
+  }, [zoneMode])
 
   // 폴리곤 편집 모드(레이아웃 2단계)를 벗어나면 미완성 꼭짓점 정리 + 구역 모드 초기화
   const wasPolyModeRef = useRef(false)
@@ -239,7 +251,8 @@ export default function SeatMapPreview({
       setPolyVertices([])
     }
     if (!wasPolyModeRef.current && isPolyModeNow) {
-      setZoneMode('aisle')
+      if (onZoneModeChange) onZoneModeChange('aisle')
+      else setZoneModeInternal('aisle')
     }
     wasPolyModeRef.current = isPolyModeNow
     prevEditModeRef.current = editMode
@@ -450,7 +463,7 @@ export default function SeatMapPreview({
       </p>
 
       {/* 편집 모드 안내: layout 2단계는 복도/제외구역 토글 (시안 4b/5b) */}
-      {editMode === 'layout' && layoutPhase === 'edit' ? (
+      {editMode === 'layout' && layoutPhase === 'edit' ? (hideZoneToolbar ? null : (
         <div className="flex items-center gap-2 mb-3 flex-wrap" onClick={(e) => e.stopPropagation()}>
           <div className="flex rounded-lg border border-gray-200 overflow-hidden">
             <button
@@ -483,7 +496,7 @@ export default function SeatMapPreview({
             ↩ 크기 재설정
           </button>
         </div>
-      ) : editMode && modeInfo && (
+      )) : editMode && modeInfo && (
         <div className="flex items-center gap-2 mb-3">
           <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
             {modeInfo}
@@ -789,6 +802,8 @@ function GhostGrid({
   onSelChange?: (rows: number, cols: number) => void
 }) {
   const [sel, setSel] = useState({ rows: currentRows, cols: currentCols })
+  // PC: 클릭 전까지 마우스 호버를 따라 선택이 움직임. 클릭하면 고정(이후 드래그로 조정)
+  const lockedRef = useRef(false)
 
   // 선택 변경을 부모(바텀시트)에 보고
   useEffect(() => {
@@ -817,14 +832,22 @@ function GhostGrid({
   }
   function handleDown(e: React.PointerEvent) {
     draggingRef.current = true
+    lockedRef.current = true  // 클릭한 순간부터 호버 추적 대신 고정
     e.currentTarget.setPointerCapture(e.pointerId)
     const c = cellFromEvent(e)
     if (c) setSel({ rows: c.row, cols: c.col })
   }
   function handleMove(e: React.PointerEvent) {
-    if (!draggingRef.current) return
-    const c = cellFromEvent(e)
-    if (c) setSel({ rows: c.row, cols: c.col })
+    if (draggingRef.current) {
+      const c = cellFromEvent(e)
+      if (c) setSel({ rows: c.row, cols: c.col })
+      return
+    }
+    // 마우스 호버 추적 (클릭으로 고정하기 전까지)
+    if (!lockedRef.current && e.pointerType === 'mouse') {
+      const c = cellFromEvent(e)
+      if (c) setSel({ rows: c.row, cols: c.col })
+    }
   }
   function handleUp() {
     draggingRef.current = false
