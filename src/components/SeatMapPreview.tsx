@@ -1087,7 +1087,7 @@ const SeatPopup = forwardRef<HTMLDivElement, SeatPopupProps>(
                 sheet ? 'px-4 py-3 text-sm rounded-lg' : 'px-3.5 py-2 text-xs'
               } ${
                 item.danger
-                  ? 'text-rose-400 hover:bg-rose-50/60'
+                  ? 'text-rose-400/90 hover:bg-gray-50'
                   : 'text-gray-700 hover:bg-gray-50'
               }`}
             >
