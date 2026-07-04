@@ -33,6 +33,8 @@ interface Props {
   viewOnly?: boolean
   seatMenuAsSheet?: boolean  // 모바일: 좌석 메뉴를 바텀시트로 (시안 5d)
   exitTapMode?: boolean      // 모바일: 가장자리 탭으로 출입구 토글 (시안 5c)
+  ghostHideActions?: boolean // 모바일: 고스트 그리드 버튼을 바텀시트에서 렌더
+  onGhostSelChange?: (rows: number, cols: number) => void
 }
 
 interface SeatPos { row: number; col: number }
@@ -157,6 +159,8 @@ export default function SeatMapPreview({
   viewOnly = false,
   seatMenuAsSheet = false,
   exitTapMode = false,
+  ghostHideActions = false,
+  onGhostSelChange,
 }: Props) {
   // viewOnly(보기 전용)일 땐 편집 상태를 무시해 깔끔한 이미지로만 렌더링
   const editMode = viewOnly ? null : editModeProp
@@ -514,6 +518,8 @@ export default function SeatMapPreview({
           currentCols={config.cols}
           onApply={(rows, cols) => onSetGridSize(rows, cols)}
           onCancel={onCancelEditMode}
+          hideActions={ghostHideActions}
+          onSelChange={onGhostSelChange}
         />
         </div>
       )}
@@ -772,13 +778,23 @@ function GhostGrid({
   currentCols,
   onApply,
   onCancel,
+  hideActions = false,
+  onSelChange,
 }: {
   currentRows: number
   currentCols: number
   onApply: (rows: number, cols: number) => void
   onCancel: () => void
+  hideActions?: boolean          // 모바일: 버튼은 바텀시트에서 렌더
+  onSelChange?: (rows: number, cols: number) => void
 }) {
   const [sel, setSel] = useState({ rows: currentRows, cols: currentCols })
+
+  // 선택 변경을 부모(바텀시트)에 보고
+  useEffect(() => {
+    onSelChange?.(sel.rows, sel.cols)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sel.rows, sel.cols])
   const bodyRef = useRef<HTMLDivElement>(null)
   const draggingRef = useRef(false)
 
@@ -786,10 +802,14 @@ function GhostGrid({
   const PITCH = GHOST_CELL + 1  // 셀 간격 포함 피치
 
   function cellFromEvent(e: React.PointerEvent): { row: number; col: number } | null {
-    const rect = bodyRef.current?.getBoundingClientRect()
-    if (!rect) return null
-    const col = Math.floor((e.clientX - rect.left) / PITCH) + 1
-    const row = Math.floor((e.clientY - rect.top) / PITCH) + 1
+    const el = bodyRef.current
+    if (!el) return null
+    const rect = el.getBoundingClientRect()
+    // 조상에 transform: scale이 있으면 시각 크기와 레이아웃 크기가 달라짐 — 배율 보정
+    const scaleX = rect.width / el.offsetWidth || 1
+    const scaleY = rect.height / el.offsetHeight || 1
+    const col = Math.floor((e.clientX - rect.left) / scaleX / PITCH) + 1
+    const row = Math.floor((e.clientY - rect.top) / scaleY / PITCH) + 1
     return {
       row: Math.min(Math.max(row, 1), GHOST_MAX_ROWS),
       col: Math.min(Math.max(col, 1), GHOST_MAX_COLS),
@@ -889,24 +909,26 @@ function GhostGrid({
         </div>
       </div>
 
-      {/* 적용 / 취소 */}
-      <div className="flex items-center gap-2 mt-5">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-4 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-        >
-          취소
-        </button>
-        <button
-          type="button"
-          onClick={() => onApply(sel.rows, sel.cols)}
-          className="px-5 py-2 text-sm rounded-lg btn-accent font-medium"
-        >
-          이 크기로 적용
-        </button>
-        <span className="text-xs text-gray-400 ml-1">드래그해서 행·열 범위를 지정하세요</span>
-      </div>
+      {/* 적용 / 취소 (모바일에선 바텀시트가 대신 렌더) */}
+      {!hideActions && (
+        <div className="flex items-center gap-2 mt-5">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={() => onApply(sel.rows, sel.cols)}
+            className="px-5 py-2 text-sm rounded-lg btn-accent font-medium"
+          >
+            이 크기로 적용
+          </button>
+          <span className="text-xs text-gray-400 ml-1">드래그해서 행·열 범위를 지정하세요</span>
+        </div>
+      )}
     </div>
   )
 }
