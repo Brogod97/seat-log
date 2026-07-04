@@ -918,7 +918,7 @@ function GhostGrid({
             <span style={{ ...handleBase, left: '100%', top: 0 }} />
             <span style={{ ...handleBase, left: 0, top: '100%' }} />
             <span style={{ ...handleBase, left: '100%', top: '100%', width: 14, height: 14, background: 'var(--accent)' }} />
-            {/* 크기 배지 */}
+            {/* 크기 배지 — 마지막 행 알파벳 × 열 수 (예: O × 32) */}
             <span
               style={{
                 position: 'absolute', left: '100%', top: '100%', marginLeft: 10, marginTop: 8,
@@ -926,7 +926,7 @@ function GhostGrid({
                 fontSize: 12, fontWeight: 600, padding: '3px 8px', borderRadius: 6,
               }}
             >
-              {sel.rows} × {sel.cols}
+              {indexToLabel(sel.rows - 1)} × {sel.cols}
             </span>
           </div>
         </div>

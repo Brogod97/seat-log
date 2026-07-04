@@ -5,6 +5,7 @@ import SeatMapForm from './components/SeatMapForm'
 import SeatMapPreview from './components/SeatMapPreview'
 import type { SeatMapConfig, Range, ExitSide } from './types'
 import { themeFor } from './theme'
+import { indexToLabel } from './utils/rowLabel'
 
 export type EditMode = 'layout' | 'prime' | 'watched' | null
 
@@ -614,7 +615,7 @@ function App() {
                   <>
                     <div className="flex items-baseline justify-between mb-1">
                       <span className="text-sm font-bold text-gray-800 dark:text-gray-100">선택 범위</span>
-                      <span className="text-sm font-bold text-accent">{ghostSel.rows} × {ghostSel.cols}</span>
+                      <span className="text-sm font-bold text-accent">{indexToLabel(ghostSel.rows - 1)} × {ghostSel.cols}</span>
                     </div>
                     <p className="text-xs text-gray-400 mb-3">그리드를 드래그해 행·열 범위를 지정하세요. 핸들을 끌어 크기를 조절할 수 있어요.</p>
                     <div className="flex gap-2">
