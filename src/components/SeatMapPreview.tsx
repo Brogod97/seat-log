@@ -195,38 +195,38 @@ export default function SeatMapPreview({
   const dragHandledRef = useRef(false)
   const suppressNextClickRef = useRef(false)
 
-  // 좌석 픽셀 중심 계산 (SVG 오버레이용)
-  // 열: flex container에 gap:2가 있어서 gap div 양쪽에 2px씩 추가됨
-  // layout edit 모드에서는 gap div가 8px으로 확장되어 COL/ROW_STEP이 달라짐
-  function seatPixelCenter(row: number, col: number): { x: number; y: number } {
-    const COL_STEP = SEAT + 2 + normalGap + 2   // flex_gap(2) + gap_div + flex_gap(2)
-    const ROW_STEP = SEAT + normalGap            // seat + gap_div
-    const AISLE_EXTRA = AISLE - normalGap        // aisle 추가 여백
+  // 그리드 픽셀 스텝 (좌석 중심·전체 크기 계산 공통 기준)
+  // 열: 행이 flex(gap:2)라 gap div 양쪽에 2px씩 붙음 → COL_STEP = seat + 2 + gap_div + 2
+  //     layout edit 모드에서는 gap div가 8px으로 확장됨
+  // 행: 바깥 div는 flex gap이 없어 ROW_STEP = seat + gap_div
+  const isLayoutEdit = editMode === 'layout' && layoutPhase === 'edit'
+  const normalGap = isLayoutEdit ? 8 : 2
+  const COL_STEP = SEAT + 2 + normalGap + 2
+  const ROW_STEP = SEAT + normalGap
+  const AISLE_EXTRA = AISLE - normalGap
 
+  // 좌석 픽셀 중심 계산 (SVG 오버레이·복도 띠용)
+  function seatPixelCenter(row: number, col: number): { x: number; y: number } {
     let x = (col - 1) * COL_STEP + SEAT / 2
     for (let c = 1; c < col; c++) {
       if (colAisleSet.has(c)) x += AISLE_EXTRA
     }
-
     let y = (row - 1) * ROW_STEP + SEAT / 2
     for (let r = 1; r < row; r++) {
       if (rowAisleSet.has(r)) y += AISLE_EXTRA
     }
-
     return { x, y }
   }
 
-  // 전체 그리드 픽셀 크기 계산
-  const isLayoutEdit = editMode === 'layout' && layoutPhase === 'edit'
-  const normalGap = isLayoutEdit ? 8 : 2
+  // 전체 그리드 픽셀 크기 (스텝과 동일 기준으로 계산)
   const gridPixelWidth = (() => {
-    let w = cols * (SEAT + normalGap) - normalGap
-    colAisles.forEach(() => { w += AISLE - normalGap })
+    let w = (cols - 1) * COL_STEP + SEAT
+    colAisles.forEach((c) => { if (c < cols) w += AISLE_EXTRA })
     return w
   })()
   const gridPixelHeight = (() => {
-    let h = rows * (SEAT + normalGap) - normalGap
-    rowAisles.forEach(() => { h += AISLE - normalGap })
+    let h = (rows - 1) * ROW_STEP + SEAT
+    rowAisles.forEach((r) => { if (r < rows) h += AISLE_EXTRA })
     return h
   })()
 
@@ -1087,7 +1087,7 @@ const SeatPopup = forwardRef<HTMLDivElement, SeatPopupProps>(
                 sheet ? 'px-4 py-3 text-sm rounded-lg' : 'px-3.5 py-2 text-xs'
               } ${
                 item.danger
-                  ? 'text-red-600 hover:bg-red-50'
+                  ? 'text-rose-400 hover:bg-rose-50/60'
                   : 'text-gray-700 hover:bg-gray-50'
               }`}
             >
