@@ -671,7 +671,7 @@ export default function SeatMapPreview({
                             bg, 'rounded flex items-center justify-center transition-colors cursor-pointer',
                             excluded ? 'text-gray-300' : 'text-gray-700',
                             inEditMode ? 'hover:brightness-90' : '',
-                            highlight ? 'ring-2 ring-offset-0 ring-gray-700 brightness-75'
+                            highlight ? 'ring-2 ring-offset-1 ring-gray-500 z-10'
                               : ring ? `ring-2 ring-offset-0 ${ring}` : '',
                           ].filter(Boolean).join(' ')}
                           onMouseDown={() => { if (isRangeMode) handleRangeMouseDown({ row, col }) }}
