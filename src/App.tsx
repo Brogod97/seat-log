@@ -195,7 +195,7 @@ function App() {
     const blob = new Blob([JSON.stringify(saves, null, 2)], { type: 'application/json' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = 'seat-maps.json'
+    a.download = 'seat-log.json'
     a.click()
     URL.revokeObjectURL(a.href)
   }
@@ -470,7 +470,7 @@ function App() {
         <div className="flex items-center justify-between mb-4">
           <h1 className="flex items-center gap-2 text-lg font-bold text-gray-800 dark:text-gray-100">
             <img src="/logo.svg" width="24" height="24" alt="" className="shrink-0 rounded-md" />
-            좌석표 생성기
+            Seat Log
           </h1>
           <div className="flex items-center gap-1">
             <button

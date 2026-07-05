@@ -11,8 +11,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: '좌석표 생성기',
-        short_name: '좌석표',
+        name: 'Seat Log',
+        short_name: 'Seat Log',
         description: '영화관 좌석 배치도를 그리고 명당·실관람 등을 표시해 이미지로 내보내는 도구',
         lang: 'ko',
         start_url: '/',
