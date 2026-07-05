@@ -6,6 +6,9 @@ import SeatMapPreview from './components/SeatMapPreview'
 import type { SeatMapConfig, Range, ExitSide } from './types'
 import { themeFor } from './theme'
 import { indexToLabel } from './utils/rowLabel'
+import { auth, googleProvider, db } from './firebase'
+import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth'
+import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore'
 
 export type EditMode = 'layout' | 'prime' | 'watched' | null
 
@@ -65,6 +68,59 @@ function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>(loadTheme)
   const importRef = useRef<HTMLInputElement>(null)
 
+  // --- Firebase 기기 간 동기화 (로그인 시에만, local-first) ---
+  const [user, setUser] = useState<User | null>(null)
+  const [authReady, setAuthReady] = useState(false)
+  const unsubSnapRef = useRef<(() => void) | null>(null)
+
+  const savesDoc = (uid: string) => doc(db, 'users', uid, 'state', 'saves')
+
+  async function pushSaves(next: Record<string, SeatMapConfig>) {
+    const u = auth.currentUser
+    if (!u) return
+    try {
+      await setDoc(savesDoc(u.uid), { saves: next, updatedAt: serverTimestamp() })
+    } catch (e) { console.error('동기화 업로드 실패', e) }
+  }
+
+  useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, async (u) => {
+      setUser(u)
+      setAuthReady(true)
+      // 이전 구독 정리
+      if (unsubSnapRef.current) { unsubSnapRef.current(); unsubSnapRef.current = null }
+      if (!u) return
+      const ref = savesDoc(u.uid)
+      try {
+        // 최초: 로컬 + 원격 병합 (원격 우선), 다시 업로드
+        const snap = await getDoc(ref)
+        const remote = (snap.exists() ? (snap.data().saves ?? {}) : {}) as Record<string, SeatMapConfig>
+        const local = loadSaves()
+        const merged = { ...local, ...remote }
+        setSaves(merged); writeSaves(merged)
+        await setDoc(ref, { saves: merged, updatedAt: serverTimestamp() })
+        // 이후: 다른 기기 변경을 실시간 반영
+        unsubSnapRef.current = onSnapshot(ref, (s) => {
+          if (s.metadata.hasPendingWrites) return  // 내 쓰기는 무시(루프 방지)
+          const rs = (s.data()?.saves ?? {}) as Record<string, SeatMapConfig>
+          setSaves(rs); writeSaves(rs)
+        })
+      } catch (e) { console.error('동기화 초기화 실패', e) }
+    })
+    return () => { unsubAuth(); if (unsubSnapRef.current) unsubSnapRef.current() }
+  }, [])
+
+  async function login() {
+    try { await signInWithPopup(auth, googleProvider) }
+    catch (e: unknown) {
+      const err = e as { code?: string; message?: string }
+      if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
+        alert('로그인 실패: ' + (err.message ?? err.code))
+      }
+    }
+  }
+  async function logout() { await signOut(auth) }
+
   // 좁은 화면(모바일·세로 태블릿): 편집은 전체화면 오버레이로 분리
   const [compact, setCompact] = useState(false)
   const [mobileEditOpen, setMobileEditOpen] = useState(false)
@@ -118,6 +174,7 @@ function App() {
     const next = { ...saves, [key]: config }
     setSaves(next)
     writeSaves(next)
+    pushSaves(next)
   }
 
   function loadSavedConfig(key: string) {
@@ -131,6 +188,7 @@ function App() {
     delete next[key]
     setSaves(next)
     writeSaves(next)
+    pushSaves(next)
   }
 
   function exportJson() {
@@ -153,6 +211,7 @@ function App() {
           const next = { ...saves, ...parsed }
           setSaves(next)
           writeSaves(next)
+          pushSaves(next)
         }
       } catch { alert('파일을 읽을 수 없어요.') }
       if (importRef.current) importRef.current.value = ''
@@ -434,6 +493,33 @@ function App() {
 
         {/* 저장 / 불러오기 */}
         <div className="mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
+          {/* 기기 간 동기화 (Google 로그인) */}
+          <div className="mb-3">
+            {user ? (
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-green-500" title="동기화 켜짐">☁️</span>
+                <span className="flex-1 truncate text-gray-500 dark:text-gray-400">{user.email}</span>
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="px-2 py-1 rounded border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  로그아웃
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={login}
+                disabled={!authReady}
+                className="w-full flex items-center justify-center gap-2 text-xs px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
+                title="로그인하면 여러 기기에서 저장 목록이 동기화돼요"
+              >
+                <span>☁️</span> Google 로그인 — 기기 간 동기화
+              </button>
+            )}
+          </div>
+
           {/* 저장된 좌석표 목록 (불러오기 / 삭제) */}
           {Object.keys(saves).length > 0 && (
             <div className="mb-2">
