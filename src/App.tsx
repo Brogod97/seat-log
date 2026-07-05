@@ -703,7 +703,7 @@ function App() {
                       <span className="text-sm font-bold text-gray-800 dark:text-gray-100">선택 범위</span>
                       <span className="text-sm font-bold text-accent">{indexToLabel(ghostSel.rows - 1)} × {ghostSel.cols}</span>
                     </div>
-                    <p className="text-xs text-gray-400 mb-3">그리드를 드래그해 행·열 범위를 지정하세요. 핸들을 끌어 크기를 조절할 수 있어요.</p>
+                    <p className="text-xs text-gray-400 mb-3">우하단 <span className="text-accent font-medium">● 핸들</span>을 끌어 크기를 조절하세요. (그 외 영역은 스크롤)</p>
                     <div className="flex gap-2">
                       <button type="button" onClick={cancelEditMode} className="flex-1 px-4 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300">취소</button>
                       <button type="button" onClick={() => setGridSize(ghostSel.rows, ghostSel.cols)} className="flex-1 px-4 py-2.5 text-sm rounded-xl btn-accent font-medium">이 크기로 적용</button>

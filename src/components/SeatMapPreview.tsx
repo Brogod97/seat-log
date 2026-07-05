@@ -830,7 +830,9 @@ function GhostGrid({
       col: Math.min(Math.max(col, 1), GHOST_MAX_COLS),
     }
   }
+  // 그리드 본체 선택은 마우스 전용 (터치는 스크롤에 양보 — 크기 조절은 우하단 핸들로)
   function handleDown(e: React.PointerEvent) {
+    if (e.pointerType !== 'mouse') return
     draggingRef.current = true
     lockedRef.current = true  // 클릭한 순간부터 호버 추적 대신 고정
     e.currentTarget.setPointerCapture(e.pointerId)
@@ -838,13 +840,14 @@ function GhostGrid({
     if (c) setSel({ rows: c.row, cols: c.col })
   }
   function handleMove(e: React.PointerEvent) {
+    if (e.pointerType !== 'mouse') return
     if (draggingRef.current) {
       const c = cellFromEvent(e)
       if (c) setSel({ rows: c.row, cols: c.col })
       return
     }
     // 마우스 호버 추적 (클릭으로 고정하기 전까지)
-    if (!lockedRef.current && e.pointerType === 'mouse') {
+    if (!lockedRef.current) {
       const c = cellFromEvent(e)
       if (c) setSel({ rows: c.row, cols: c.col })
     }
@@ -852,6 +855,22 @@ function GhostGrid({
   function handleUp() {
     draggingRef.current = false
   }
+
+  // 우하단 리사이즈 핸들 (터치·마우스 공통) — 이걸 끌 때만 크기 변경
+  const grabbingRef = useRef(false)
+  function grabStart(e: React.PointerEvent) {
+    e.stopPropagation()
+    grabbingRef.current = true
+    lockedRef.current = true
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+  function grabMove(e: React.PointerEvent) {
+    if (!grabbingRef.current) return
+    e.stopPropagation()
+    const c = cellFromEvent(e)
+    if (c) setSel({ rows: c.row, cols: c.col })
+  }
+  function grabEnd() { grabbingRef.current = false }
 
   const selW = sel.cols * PITCH - 1
   const selH = sel.rows * PITCH - 1
@@ -885,10 +904,10 @@ function GhostGrid({
           ))}
         </div>
 
-        {/* 셀 영역 + 선택 오버레이 */}
+        {/* 셀 영역 + 선택 오버레이 (터치 스크롤 허용, 크기 조절은 핸들로) */}
         <div
           ref={bodyRef}
-          style={{ position: 'relative', touchAction: 'none', cursor: 'crosshair' }}
+          style={{ position: 'relative', cursor: 'crosshair' }}
           onPointerDown={handleDown}
           onPointerMove={handleMove}
           onPointerUp={handleUp}
@@ -914,10 +933,10 @@ function GhostGrid({
               borderRadius: 4, pointerEvents: 'none',
             }}
           >
+            {/* 나머지 3개 모서리는 장식용 (우하단은 아래 인터랙티브 핸들이 대체) */}
             <span style={{ ...handleBase, left: 0, top: 0 }} />
             <span style={{ ...handleBase, left: '100%', top: 0 }} />
             <span style={{ ...handleBase, left: 0, top: '100%' }} />
-            <span style={{ ...handleBase, left: '100%', top: '100%', width: 14, height: 14, background: 'var(--accent)' }} />
             {/* 크기 배지 — 마지막 행 알파벳 × 열 수 (예: O × 32) */}
             <span
               style={{
@@ -928,6 +947,26 @@ function GhostGrid({
             >
               {indexToLabel(sel.rows - 1)} × {sel.cols}
             </span>
+          </div>
+
+          {/* 우하단 리사이즈 핸들 — 넉넉한 터치 영역 + 액센트 점 (이걸 끌 때만 크기 변경) */}
+          <div
+            onPointerDown={grabStart}
+            onPointerMove={grabMove}
+            onPointerUp={grabEnd}
+            onPointerCancel={grabEnd}
+            style={{
+              position: 'absolute', left: selW, top: selH, transform: 'translate(-50%, -50%)',
+              width: 36, height: 36, borderRadius: '50%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              touchAction: 'none', cursor: 'nwse-resize', zIndex: 20,
+            }}
+          >
+            <span style={{
+              width: 18, height: 18, borderRadius: '50%',
+              background: 'var(--accent)', border: '2.5px solid #fff',
+              boxShadow: '0 1px 5px rgba(0,0,0,0.4)',
+            }} />
           </div>
         </div>
       </div>
