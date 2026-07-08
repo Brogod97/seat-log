@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" overflow="visible">
+  <defs>
+    <linearGradient id="seat" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#2f3549"></stop>
+      <stop offset="1" stop-color="#252b3e"></stop>
+    </linearGradient>
+    <linearGradient id="hot" x1="0.15" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#ffda80"></stop>
+      <stop offset="1" stop-color="#ef9f34"></stop>
+    </linearGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff4d6" stop-opacity="0.85"></stop>
+      <stop offset="1" stop-color="#fff4d6" stop-opacity="0"></stop>
+    </linearGradient>
+    <filter id="blur" x="-90%" y="-90%" width="280%" height="280%"><feGaussianBlur stdDeviation="7"></feGaussianBlur></filter>
+    <filter id="sh" x="-30%" y="-30%" width="160%" height="180%"><feDropShadow dx="0" dy="1.3" stdDeviation="1.1" flood-color="#0b0e17" flood-opacity="0.5"></feDropShadow></filter>
+  </defs>
+  <g filter="url(#sh)">
+    <rect x="3" y="3" width="24" height="24" rx="8" fill="url(#seat)"></rect>
+    <rect x="36" y="3" width="24" height="24" rx="8" fill="url(#seat)"></rect>
+    <rect x="69" y="3" width="24" height="24" rx="8" fill="url(#seat)"></rect>
+    <rect x="3" y="36" width="24" height="24" rx="8" fill="url(#seat)"></rect>
+    <rect x="36" y="36" width="24" height="24" rx="8" fill="url(#seat)"></rect>
+    <rect x="69" y="36" width="24" height="24" rx="8" fill="url(#seat)"></rect>
+    <rect x="3" y="69" width="24" height="24" rx="8" fill="url(#seat)"></rect>
+    <rect x="69" y="69" width="24" height="24" rx="8" fill="url(#seat)"></rect>
+  </g>
+  <rect x="28" y="59" width="40" height="40" rx="14" fill="#f0a63c" opacity="0.44" filter="url(#blur)"></rect>
+  <g filter="url(#sh)">
+    <rect x="36" y="69" width="24" height="24" rx="8" fill="url(#hot)"></rect>
+  </g>
+  <rect x="38.4" y="70.7" width="19.2" height="6" rx="3" fill="url(#edge)" opacity="0.5"></rect>
+</svg>

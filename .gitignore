@@ -12,7 +12,7 @@ dist
 dist-ssr
 *.local
 
-# 개인 기획 문서 (공개 레포 제외)
+# 개인 기획 문서·디자인 소스 (공개 레포 제외)
 docs/
 design/
 
