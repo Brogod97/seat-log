@@ -3,7 +3,7 @@ import type { CSSProperties } from "react";
 import { toPng } from "html-to-image";
 import SeatMapForm from "./components/SeatMapForm";
 import SeatMapPreview from "./components/SeatMapPreview";
-import type { SeatMapConfig, Range, ExitSide } from "./types";
+import type { SeatMapConfig } from "./types";
 import { themeFor } from "./theme";
 import { indexToLabel } from "./utils/rowLabel";
 import {
@@ -29,23 +29,44 @@ import {
 } from "firebase/firestore";
 import { relativeTime } from "./utils/relativeTime";
 import {
-  STORAGE_KEY,
   LAST_SAVED_KEY,
   DEFAULT_CONFIG,
   configKey,
-  loadConfig,
   loadSaves,
   writeSaves,
 } from "./utils/storage";
 import { useTheme } from "./hooks/useTheme";
 import { useCompact } from "./hooks/useCompact";
 import { useFitScale } from "./hooks/useFitScale";
-
-export type EditMode = "layout" | "prime" | "watched" | null;
+import { useSeatMapConfig } from "./hooks/useSeatMapConfig";
 
 function App() {
-  const [config, setConfig] = useState<SeatMapConfig>(loadConfig);
-  const [editMode, setEditMode] = useState<EditMode>(null);
+  const {
+    config,
+    setConfig,
+    editMode,
+    setEditMode,
+    layoutPhase,
+    modeStartPos,
+    enterEditMode,
+    enterGridResize,
+    enterModeFrom,
+    cancelEditMode,
+    completeEditMode,
+    setGridSize,
+    resetConfig,
+    toggleExit,
+    addPrimeRange,
+    removePrimeRange,
+    toggleWatchedSeat,
+    setWatchedMemo,
+    addWatchedRange,
+    toggleSightRow,
+    toggleRowAisle,
+    toggleExcludedSeat,
+    excludeSeats,
+    toggleColAisle,
+  } = useSeatMapConfig();
   const [saves, setSaves] = useState<Record<string, SeatMapConfig>>(loadSaves);
   const { theme, setTheme } = useTheme();
   const importRef = useRef<HTMLInputElement>(null);
@@ -136,7 +157,6 @@ function App() {
   const [mobileScreen, setMobileScreen] = useState<
     "seat" | "layout" | "zone" | "exit"
   >("seat");
-  const [layoutPhase, setLayoutPhase] = useState<"size" | "edit">("size");
   // 모바일 레이아웃 편집: 고스트 그리드 선택값 미러 (바텀시트 표시·적용용)
   const [ghostSel, setGhostSel] = useState({ rows: 10, cols: 20 });
   // 모바일 복도·제외구역 모드 (바텀시트 토글로 제어)
@@ -173,12 +193,6 @@ function App() {
     setMobileEditOpen(false);
     setMobileScreen("seat");
   }
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-    } catch {}
-  }, [config]);
 
   function saveCurrentConfig() {
     const key = configKey(config);
@@ -241,11 +255,6 @@ function App() {
     };
     reader.readAsText(file);
   }
-  const [snapshot, setSnapshot] = useState<SeatMapConfig | null>(null);
-  const [modeStartPos, setModeStartPos] = useState<{
-    row: number;
-    col: number;
-  } | null>(null);
   const exportRef = useRef<HTMLDivElement>(null);
 
   // 프리뷰를 영역에 맞춰 확대/축소 (다운로드 추출엔 영향 없음 — transform은 시각 효과)
@@ -267,189 +276,6 @@ function App() {
     a.href = dataUrl;
     a.download = `${title}.png`;
     a.click();
-  }
-
-  function enterEditMode(mode: EditMode) {
-    setSnapshot(config);
-    setEditMode(mode);
-    setModeStartPos(null);
-    // 레이아웃 편집은 기존 그리드를 유지한 채 복도/제외 편집(2단계)으로 바로 진입
-    if (mode === "layout") setLayoutPhase("edit");
-  }
-
-  // 그리드 크기부터 다시 짜기 (모든 레이어 초기화)
-  function enterGridResize() {
-    setSnapshot(config);
-    setEditMode("layout");
-    setModeStartPos(null);
-    setLayoutPhase("size");
-  }
-
-  // 좌석 클릭 메뉴에서 편집 모드 진입 (시작 좌석 미리 지정)
-  function enterModeFrom(
-    mode: "prime" | "watched" | "excluded",
-    pos: { row: number; col: number },
-  ) {
-    setSnapshot(config);
-    setEditMode(mode as EditMode);
-    setModeStartPos(pos);
-  }
-
-  function cancelEditMode() {
-    if (snapshot) setConfig(snapshot);
-    setSnapshot(null);
-    setEditMode(null);
-    setModeStartPos(null);
-  }
-
-  function completeEditMode() {
-    setSnapshot(null);
-    setEditMode(null);
-    setModeStartPos(null);
-  }
-
-  function setGridSize(rows: number, cols: number) {
-    setConfig((c) => ({
-      ...c,
-      rows,
-      cols,
-      rowAisles: [],
-      colAisles: [],
-      sightRows: [],
-      primeRanges: [],
-      watchedSeats: [],
-      excludedSeats: [],
-      exits: [],
-    }));
-    // 크기 확정 후 layout 2단계(복도/제외 편집)로 자동 전환
-    setLayoutPhase("edit");
-  }
-
-  function toggleExit(row: number, col: number, side: ExitSide) {
-    setConfig((c) => {
-      const exists = c.exits.some(
-        (s) => s.row === row && s.col === col && s.side === side,
-      );
-      return {
-        ...c,
-        exits: exists
-          ? c.exits.filter(
-              (s) => !(s.row === row && s.col === col && s.side === side),
-            )
-          : [...c.exits, { row, col, side }],
-      };
-    });
-  }
-
-  function addPrimeRange(range: Range) {
-    setConfig((c) => ({ ...c, primeRanges: [...c.primeRanges, range] }));
-  }
-
-  function removePrimeRange(index: number) {
-    setConfig((c) => ({
-      ...c,
-      primeRanges: c.primeRanges.filter((_, i) => i !== index),
-    }));
-  }
-
-  function toggleWatchedSeat(row: number, col: number) {
-    setConfig((c) => {
-      const exists = c.watchedSeats.some((s) => s.row === row && s.col === col);
-      return {
-        ...c,
-        watchedSeats: exists
-          ? c.watchedSeats.filter((s) => !(s.row === row && s.col === col))
-          : [...c.watchedSeats, { row, col }],
-      };
-    });
-  }
-
-  function setWatchedMemo(row: number, col: number, memo: string) {
-    setConfig((c) => ({
-      ...c,
-      watchedSeats: c.watchedSeats.map((s) =>
-        s.row === row && s.col === col ? { ...s, memo } : s,
-      ),
-    }));
-  }
-
-  function addWatchedRange(range: Range) {
-    setConfig((c) => {
-      const toAdd: { row: number; col: number }[] = [];
-      for (let r = range.rowStart; r <= range.rowEnd; r++) {
-        for (let col = range.colStart; col <= range.colEnd; col++) {
-          if (!c.watchedSeats.some((s) => s.row === r && s.col === col)) {
-            toAdd.push({ row: r, col });
-          }
-        }
-      }
-      return { ...c, watchedSeats: [...c.watchedSeats, ...toAdd] };
-    });
-  }
-
-  function toggleSightRow(row: number) {
-    setConfig((c) => {
-      const exists = c.sightRows.includes(row);
-      return {
-        ...c,
-        sightRows: exists
-          ? c.sightRows.filter((r) => r !== row)
-          : [...c.sightRows, row].sort((a, b) => a - b),
-      };
-    });
-  }
-
-  function toggleRowAisle(row: number) {
-    setConfig((c) => {
-      const exists = c.rowAisles.includes(row);
-      return {
-        ...c,
-        rowAisles: exists
-          ? c.rowAisles.filter((r) => r !== row)
-          : [...c.rowAisles, row].sort((a, b) => a - b),
-      };
-    });
-  }
-
-  function toggleExcludedSeat(row: number, col: number) {
-    setConfig((c) => {
-      const exists = c.excludedSeats.some(
-        (s) => s.row === row && s.col === col,
-      );
-      return {
-        ...c,
-        excludedSeats: exists
-          ? c.excludedSeats.filter((s) => !(s.row === row && s.col === col))
-          : [...c.excludedSeats, { row, col }],
-      };
-    });
-  }
-
-  function excludeSeats(seats: { row: number; col: number }[]) {
-    setConfig((c) => {
-      const toAdd = seats.filter(
-        (s) => !c.excludedSeats.some((e) => e.row === s.row && e.col === s.col),
-      );
-      return { ...c, excludedSeats: [...c.excludedSeats, ...toAdd] };
-    });
-  }
-
-  function toggleColAisle(col: number) {
-    setConfig((c) => {
-      const exists = c.colAisles.includes(col);
-      return {
-        ...c,
-        colAisles: exists
-          ? c.colAisles.filter((c2) => c2 !== col)
-          : [...c.colAisles, col].sort((a, b) => a - b),
-      };
-    });
-  }
-
-  function resetConfig() {
-    setConfig(DEFAULT_CONFIG);
-    setSnapshot(null);
-    setEditMode(null);
   }
 
   const previewProps = {

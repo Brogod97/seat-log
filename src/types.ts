@@ -33,3 +33,5 @@ export interface Seat {
   col: number
   memo?: string  // 실관람 좌석 메모
 }
+
+export type EditMode = 'layout' | 'prime' | 'watched' | null

@@ -1,5 +1,4 @@
-import type { SeatMapConfig } from '../types'
-import type { EditMode } from '../App'
+import type { SeatMapConfig, EditMode } from '../types'
 import { useState } from 'react'
 import { indexToLabel } from '../utils/rowLabel'
 import { THEATERS, BRAND_LIST } from '../data/theaters'

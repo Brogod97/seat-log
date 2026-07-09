@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useLayoutEffect, forwardRef } from 'react'
 import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
 import type { SeatMapConfig, Range, ExitSide } from '../types'
-import type { EditMode } from '../App'
+import type { EditMode } from '../types'
 import { calcCenterCols } from '../utils/centerCols'
 import { indexToLabel } from '../utils/rowLabel'
 
