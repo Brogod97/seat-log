@@ -27,79 +27,20 @@ import {
   onSnapshot,
   serverTimestamp,
 } from "firebase/firestore";
+import { relativeTime } from "./utils/relativeTime";
+import {
+  STORAGE_KEY,
+  THEME_KEY,
+  LAST_SAVED_KEY,
+  DEFAULT_CONFIG,
+  configKey,
+  loadTheme,
+  loadConfig,
+  loadSaves,
+  writeSaves,
+} from "./utils/storage";
 
 export type EditMode = "layout" | "prime" | "watched" | null;
-
-const STORAGE_KEY = "seat_map_current";
-const SAVES_KEY = "seat_map_saves";
-const THEME_KEY = "seat_map_theme";
-const LAST_SAVED_KEY = "seat_map_last_saved";
-
-// 상대 시각 표기 (계정 카드용)
-function relativeTime(ts: number): string {
-  const diff = Date.now() - ts;
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return "방금 전 저장";
-  if (m < 60) return `${m}분 전 저장`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}시간 전 저장`;
-  const d = Math.floor(h / 24);
-  if (d === 1) return "어제 저장";
-  if (d < 7) return `${d}일 전 저장`;
-  return new Date(ts).toLocaleDateString("ko-KR") + " 저장";
-}
-
-function loadTheme(): "light" | "dark" {
-  try {
-    const saved = localStorage.getItem(THEME_KEY);
-    if (saved === "light" || saved === "dark") return saved;
-    // 저장값 없으면 OS 설정 따름
-    if (window.matchMedia?.("(prefers-color-scheme: dark)").matches)
-      return "dark";
-  } catch {}
-  return "light";
-}
-
-function configKey(c: SeatMapConfig): string {
-  return [c.brand, c.branch, c.screen].filter(Boolean).join("|") || "이름 없음";
-}
-
-function loadConfig(): SeatMapConfig {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return { ...DEFAULT_CONFIG, ...JSON.parse(saved) };
-  } catch {}
-  return DEFAULT_CONFIG;
-}
-
-function loadSaves(): Record<string, SeatMapConfig> {
-  try {
-    return JSON.parse(localStorage.getItem(SAVES_KEY) ?? "{}");
-  } catch {
-    return {};
-  }
-}
-
-function writeSaves(saves: Record<string, SeatMapConfig>) {
-  try {
-    localStorage.setItem(SAVES_KEY, JSON.stringify(saves));
-  } catch {}
-}
-
-const DEFAULT_CONFIG: SeatMapConfig = {
-  brand: "",
-  branch: "",
-  screen: "",
-  rows: 10,
-  cols: 20,
-  rowAisles: [],
-  colAisles: [],
-  sightRows: [],
-  primeRanges: [],
-  watchedSeats: [],
-  excludedSeats: [],
-  exits: [],
-};
 
 function App() {
   const [config, setConfig] = useState<SeatMapConfig>(loadConfig);
