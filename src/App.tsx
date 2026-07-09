@@ -30,15 +30,16 @@ import {
 import { relativeTime } from "./utils/relativeTime";
 import {
   STORAGE_KEY,
-  THEME_KEY,
   LAST_SAVED_KEY,
   DEFAULT_CONFIG,
   configKey,
-  loadTheme,
   loadConfig,
   loadSaves,
   writeSaves,
 } from "./utils/storage";
+import { useTheme } from "./hooks/useTheme";
+import { useCompact } from "./hooks/useCompact";
+import { useFitScale } from "./hooks/useFitScale";
 
 export type EditMode = "layout" | "prime" | "watched" | null;
 
@@ -46,7 +47,7 @@ function App() {
   const [config, setConfig] = useState<SeatMapConfig>(loadConfig);
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [saves, setSaves] = useState<Record<string, SeatMapConfig>>(loadSaves);
-  const [theme, setTheme] = useState<"light" | "dark">(loadTheme);
+  const { theme, setTheme } = useTheme();
   const importRef = useRef<HTMLInputElement>(null);
 
   // --- Firebase 기기 간 동기화 (로그인 시에만, local-first) ---
@@ -129,8 +130,7 @@ function App() {
     await signOut(auth);
   }
 
-  // 좁은 화면(모바일·세로 태블릿): 편집은 전체화면 오버레이로 분리
-  const [compact, setCompact] = useState(false);
+  const compact = useCompact();
   const [mobileEditOpen, setMobileEditOpen] = useState(false);
   // 모바일 오버레이 화면 (시안 3): 좌석 설정 / 레이아웃 / 복도·제외 / 출입구
   const [mobileScreen, setMobileScreen] = useState<
@@ -143,16 +143,6 @@ function App() {
   const [mobileZoneMode, setMobileZoneMode] = useState<"aisle" | "excluded">(
     "aisle",
   );
-  useEffect(() => {
-    const mq = window.matchMedia(
-      "(max-width: 1023px), (orientation: portrait)",
-    );
-    const update = () => setCompact(mq.matches);
-    update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
-  }, []);
-
   // compact에서 편집 모드가 켜지면 전체화면 오버레이를 띄우고 화면을 동기화
   useEffect(() => {
     if (compact && editMode !== null) {
@@ -189,13 +179,6 @@ function App() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
     } catch {}
   }, [config]);
-
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", theme === "dark");
-    try {
-      localStorage.setItem(THEME_KEY, theme);
-    } catch {}
-  }, [theme]);
 
   function saveCurrentConfig() {
     const key = configKey(config);
@@ -266,37 +249,8 @@ function App() {
   const exportRef = useRef<HTMLDivElement>(null);
 
   // 프리뷰를 영역에 맞춰 확대/축소 (다운로드 추출엔 영향 없음 — transform은 시각 효과)
-  const fitAreaRef = useRef<HTMLDivElement>(null);
-  const fitContentRef = useRef<HTMLDivElement>(null);
-  const [fitScale, setFitScale] = useState(1);
-  const [fitHeight, setFitHeight] = useState<number | undefined>(undefined);
-  const MAX_FIT_SCALE = 2.5;
-
-  useEffect(() => {
-    const area = fitAreaRef.current;
-    const content = fitContentRef.current;
-    if (!area || !content) return;
-    function recompute() {
-      const a = fitAreaRef.current,
-        el = fitContentRef.current;
-      if (!a || !el) return;
-      const naturalW = el.offsetWidth,
-        naturalH = el.offsetHeight;
-      if (naturalW <= 0 || naturalH <= 0) return;
-      const availW = a.clientWidth;
-      const wScale = availW / naturalW;
-      // 좌우 분할(비-compact)에선 영역 높이도 고려해 넘치지 않게, 모바일 스택에선 너비만(세로 스크롤 허용)
-      const hScale = compact ? Infinity : a.clientHeight / naturalH;
-      const s = Math.min(wScale, hScale, MAX_FIT_SCALE);
-      setFitScale(s);
-      setFitHeight(naturalH * s);
-    }
-    recompute();
-    const ro = new ResizeObserver(recompute);
-    ro.observe(area);
-    ro.observe(content);
-    return () => ro.disconnect();
-  }, [compact]);
+  const { fitAreaRef, fitContentRef, fitScale, fitHeight } =
+    useFitScale(compact);
 
   async function downloadImage() {
     if (!exportRef.current) return;
