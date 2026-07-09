@@ -4,14 +4,9 @@ import SeatMapForm from "./components/SeatMapForm";
 import SeatMapPreview from "./components/SeatMapPreview";
 import { themeFor } from "./theme";
 import { indexToLabel } from "./utils/rowLabel";
-import {
-  SunIcon,
-  MoonIcon,
-  ResetIcon,
-  SyncedCheckIcon,
-  GoogleGIcon,
-} from "./components/icons";
-import { relativeTime } from "./utils/relativeTime";
+import { SunIcon, MoonIcon, ResetIcon } from "./components/icons";
+import { AccountCard } from "./components/sidebar/AccountCard";
+import { SavedList } from "./components/sidebar/SavedList";
 import { useTheme } from "./hooks/useTheme";
 import { useCompact } from "./hooks/useCompact";
 import { useFitScale } from "./hooks/useFitScale";
@@ -190,94 +185,19 @@ function App() {
 
         {/* 저장 / 불러오기 */}
         <div className="mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
-          {/* 기기 간 동기화 (Google 로그인) */}
-          <div className="mb-3">
-            {user ? (
-              (() => {
-                const name =
-                  user.displayName || (user.email ?? "").split("@")[0];
-                const initial = (name || "?").trim().charAt(0).toUpperCase();
-                return (
-                  <div className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl border border-gray-200 dark:border-gray-600">
-                    <div
-                      className="w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-white text-sm font-bold"
-                      style={{
-                        background: "linear-gradient(135deg, #ffd06e, #ea9430)",
-                      }}
-                    >
-                      {initial}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-bold text-gray-800 dark:text-gray-100 truncate">
-                          {name}
-                        </span>
-                        <span className="inline-flex items-center gap-0.5 shrink-0 text-[11px] px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">
-                          <SyncedCheckIcon size={11} /> 동기화됨
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-gray-400 dark:text-gray-500 truncate">
-                        {user.email}
-                        {lastSavedAt ? ` · ${relativeTime(lastSavedAt)}` : ""}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={logout}
-                      className="shrink-0 text-xs px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-                    >
-                      로그아웃
-                    </button>
-                  </div>
-                );
-              })()
-            ) : (
-              <button
-                type="button"
-                onClick={login}
-                disabled={!authReady}
-                className="w-full flex items-center justify-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
-                title="로그인하면 여러 기기에서 저장 목록이 동기화돼요"
-              >
-                <GoogleGIcon size={15} />
-                Google 로그인
-              </button>
-            )}
-          </div>
+          <AccountCard
+            user={user}
+            authReady={authReady}
+            lastSavedAt={lastSavedAt}
+            onLogin={login}
+            onLogout={logout}
+          />
 
-          {/* 저장된 좌석표 목록 (불러오기 / 삭제) */}
-          {Object.keys(saves).length > 0 && (
-            <div className="mb-2">
-              <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">
-                저장된 좌석표
-              </p>
-              <div className="flex flex-col gap-1">
-                {Object.keys(saves).map((key) => (
-                  <div
-                    key={key}
-                    className="flex items-center gap-1 rounded border border-gray-200 dark:border-gray-600"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => loadSavedConfig(key)}
-                      className="flex-1 text-left text-xs px-2 py-1.5 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-l truncate"
-                      title="불러오기"
-                    >
-                      {key.replace(/\|/g, " ")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => deleteSavedConfig(key)}
-                      className="px-2 py-1.5 text-gray-400 hover:text-red-500 text-sm"
-                      title="삭제"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <SavedList
+            saves={saves}
+            onLoad={loadSavedConfig}
+            onDelete={deleteSavedConfig}
+          />
 
           {/* 저장 / JSON */}
           <div className="flex gap-1.5">
