@@ -1,14 +1,17 @@
 import { useState, useRef, useEffect, useLayoutEffect, forwardRef } from 'react'
 import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
-import type { SeatMapConfig, Range, ExitSide } from '../types'
-import type { EditMode } from '../types'
+import type { SeatMapConfig, Range, ExitSide, EditMode } from '../types'
 import { calcCenterCols } from '../utils/centerCols'
 import { indexToLabel } from '../utils/rowLabel'
-
-const GHOST_MAX_ROWS = 26
-const GHOST_MAX_COLS = 36
-const GHOST_CELL = 18
+import {
+  makeSeatGeometry, normalizeRange, inRange, pointInOrOnPolygon, exitLineStyle,
+  type SeatPos,
+} from '../utils/seatGeometry'
+import {
+  GHOST_MAX_ROWS, GHOST_MAX_COLS, GHOST_CELL,
+  LAYER_BG, LAYER_RING, getAppliedLayers, MODE_STATUS, MODE_RING,
+} from '../utils/seatStyles'
 
 interface Props {
   config: SeatMapConfig
@@ -40,7 +43,6 @@ interface Props {
   hideZoneToolbar?: boolean                  // 모바일: 카드 안 토글 숨김 (바텀시트가 대신)
 }
 
-interface SeatPos { row: number; col: number }
 interface PopupState { x: number; y: number; row: number; col: number }
 
 type HighlightHint =
@@ -48,108 +50,6 @@ type HighlightHint =
   | { type: 'watched'; row: number; col: number }
   | { type: 'sightRow'; row: number }
   | null
-
-function normalizeRange(a: SeatPos, b: SeatPos): Range {
-  return {
-    rowStart: Math.min(a.row, b.row),
-    rowEnd: Math.max(a.row, b.row),
-    colStart: Math.min(a.col, b.col),
-    colEnd: Math.max(a.col, b.col),
-  }
-}
-
-function inRange(row: number, col: number, r: Range) {
-  return row >= r.rowStart && row <= r.rowEnd && col >= r.colStart && col <= r.colEnd
-}
-
-// 우선순위: watched > prime > sightRow > center
-type Layer = 'watched' | 'prime' | 'sightRow' | 'center'
-const LAYER_BG: Record<Layer, string> = {
-  watched:  'bg-yellow-300',
-  prime:    'bg-red-300',
-  sightRow: 'bg-green-300',
-  center:   'bg-blue-300',
-}
-const LAYER_RING: Record<Layer, string> = {
-  watched:  'ring-yellow-400',
-  prime:    'ring-red-400',
-  sightRow: 'ring-green-400',
-  center:   'ring-blue-400',
-}
-
-function getAppliedLayers(
-  row: number, col: number,
-  config: SeatMapConfig,
-  centerCols: number[]
-): Layer[] {
-  const layers: Layer[] = []
-  if (config.watchedSeats.some((s) => s.row === row && s.col === col)) layers.push('watched')
-  if (config.primeRanges.some((r) => inRange(row, col, r))) layers.push('prime')
-  if (config.sightRows.includes(row)) layers.push('sightRow')
-  if (centerCols.includes(col)) layers.push('center')
-  return layers
-}
-
-const MODE_STATUS: Record<NonNullable<EditMode>, (arg: boolean | number) => string> = {
-  layout:  () => '',  // phase별로 직접 표시
-  prime:   (f) => f ? '끝 좌석을 클릭 또는 드래그해 범위 확정' : '시작 좌석 클릭 또는 드래그 시작',
-  watched: (f) => f ? '끝 좌석 클릭 (같은 좌석 = 1칸)' : '시작 좌석 클릭',
-}
-
-const MODE_RING: Record<NonNullable<EditMode>, string> = {
-  layout:  'ring-indigo-400 bg-indigo-50',
-  prime:   'ring-red-400 bg-red-50',
-  watched: 'ring-yellow-400 bg-yellow-50',
-}
-
-// 폴리곤 내부 판정 (ray casting)
-function pointInPolygon(row: number, col: number, vertices: SeatPos[]): boolean {
-  const n = vertices.length
-  if (n < 3) return false
-  let inside = false
-  for (let i = 0, j = n - 1; i < n; j = i++) {
-    const xi = vertices[i].col, yi = vertices[i].row
-    const xj = vertices[j].col, yj = vertices[j].row
-    if (((yi > row) !== (yj > row)) && col < ((xj - xi) * (row - yi)) / (yj - yi) + xi) {
-      inside = !inside
-    }
-  }
-  return inside
-}
-
-// 점이 선분에 가까운지 판정 (threshold 단위: grid 좌표)
-function pointNearSegment(
-  px: number, py: number,
-  ax: number, ay: number,
-  bx: number, by: number,
-  threshold = 0.6
-): boolean {
-  const dx = bx - ax, dy = by - ay
-  const lenSq = dx * dx + dy * dy
-  if (lenSq === 0) return Math.hypot(px - ax, py - ay) < threshold
-  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq))
-  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy)) < threshold
-}
-
-// 내부 또는 경계선에 걸친 좌석 판정
-function pointInOrOnPolygon(row: number, col: number, vertices: SeatPos[]): boolean {
-  if (pointInPolygon(row, col, vertices)) return true
-  const n = vertices.length
-  for (let i = 0, j = n - 1; i < n; j = i++) {
-    if (pointNearSegment(col, row, vertices[i].col, vertices[i].row, vertices[j].col, vertices[j].row)) return true
-  }
-  return false
-}
-
-// 출입구 선: 좌석의 바깥 변에 문 위치를 표시
-function exitLineStyle(side: ExitSide): CSSProperties {
-  const C = '#4b5563', T = 4, OUT = -5
-  const base: CSSProperties = { position: 'absolute', background: C, borderRadius: 2, zIndex: 5 }
-  if (side === 'left') return { ...base, left: OUT, top: 2, bottom: 2, width: T }
-  if (side === 'right') return { ...base, right: OUT, top: 2, bottom: 2, width: T }
-  if (side === 'top') return { ...base, top: OUT, left: 2, right: 2, height: T }
-  return { ...base, bottom: OUT, left: 2, right: 2, height: T }  // bottom
-}
 
 export default function SeatMapPreview({
   config, editMode: editModeProp, layoutPhase, modeStartPos,
@@ -195,40 +95,12 @@ export default function SeatMapPreview({
   const dragHandledRef = useRef(false)
   const suppressNextClickRef = useRef(false)
 
-  // 그리드 픽셀 스텝 (좌석 중심·전체 크기 계산 공통 기준)
-  // 열: 행이 flex(gap:2)라 gap div 양쪽에 2px씩 붙음 → COL_STEP = seat + 2 + gap_div + 2
-  //     layout edit 모드에서는 gap div가 8px으로 확장됨
-  // 행: 바깥 div는 flex gap이 없어 ROW_STEP = seat + gap_div
+  // 그리드 픽셀 좌표 (layout edit 모드에서 gap div가 8px으로 확장됨 → normalGap)
   const isLayoutEdit = editMode === 'layout' && layoutPhase === 'edit'
   const normalGap = isLayoutEdit ? 8 : 2
-  const COL_STEP = SEAT + 2 + normalGap + 2
-  const ROW_STEP = SEAT + normalGap
-  const AISLE_EXTRA = AISLE - normalGap
-
-  // 좌석 픽셀 중심 계산 (SVG 오버레이·복도 띠용)
-  function seatPixelCenter(row: number, col: number): { x: number; y: number } {
-    let x = (col - 1) * COL_STEP + SEAT / 2
-    for (let c = 1; c < col; c++) {
-      if (colAisleSet.has(c)) x += AISLE_EXTRA
-    }
-    let y = (row - 1) * ROW_STEP + SEAT / 2
-    for (let r = 1; r < row; r++) {
-      if (rowAisleSet.has(r)) y += AISLE_EXTRA
-    }
-    return { x, y }
-  }
-
-  // 전체 그리드 픽셀 크기 (스텝과 동일 기준으로 계산)
-  const gridPixelWidth = (() => {
-    let w = (cols - 1) * COL_STEP + SEAT
-    colAisles.forEach((c) => { if (c < cols) w += AISLE_EXTRA })
-    return w
-  })()
-  const gridPixelHeight = (() => {
-    let h = (rows - 1) * ROW_STEP + SEAT
-    rowAisles.forEach((r) => { if (r < rows) h += AISLE_EXTRA })
-    return h
-  })()
+  const { seatPixelCenter, gridPixelWidth, gridPixelHeight } = makeSeatGeometry({
+    rows, cols, rowAisles, colAisles, seat: SEAT, aisle: AISLE, normalGap,
+  })
 
   // 레이아웃 2단계 안의 구역 모드: 복도 / 제외구역 (시안 4b/5b)
   // 모바일에선 부모(바텀시트)가 제어(zoneModeProp), 그 외엔 내부 상태
