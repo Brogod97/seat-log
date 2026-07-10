@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { User } from "firebase/auth";
 import { SyncedCheckIcon, GoogleGIcon } from "../icons";
 import { relativeTime } from "../../utils/relativeTime";
@@ -18,21 +19,32 @@ export function AccountCard({
   onLogin,
   onLogout,
 }: Props) {
+  // 프로필 사진 로드 실패 시 이니셜로 폴백 (실패한 URL을 기억해 계정 전환 시 자동 리셋)
+  const [erroredPhotoUrl, setErroredPhotoUrl] = useState<string | null>(null);
   return (
     <div className="mb-3">
       {user ? (
         (() => {
           const name = user.displayName || (user.email ?? "").split("@")[0];
           const initial = (name || "?").trim().charAt(0).toUpperCase();
+          const showPhoto = !!user.photoURL && user.photoURL !== erroredPhotoUrl;
           return (
             <div className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl border border-gray-200 dark:border-gray-600">
               <div
-                className="w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-white text-sm font-bold"
-                style={{
-                  background: "linear-gradient(135deg, #ffd06e, #ea9430)",
-                }}
+                className="w-9 h-9 shrink-0 rounded-full overflow-hidden flex items-center justify-center text-white text-sm font-bold"
+                style={showPhoto ? undefined : { background: "linear-gradient(135deg, #ffd06e, #ea9430)" }}
               >
-                {initial}
+                {showPhoto ? (
+                  <img
+                    src={user.photoURL!}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover"
+                    onError={() => setErroredPhotoUrl(user.photoURL)}
+                  />
+                ) : (
+                  initial
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
