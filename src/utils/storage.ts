@@ -10,6 +10,7 @@ export const OWNER_KEY = "seat_map_owner";
 export const ANON_OWNER = "anon";
 export const SIDEBAR_WIDTH_KEY = "seat_map_sidebar_width";
 export const SIDEBAR_COLLAPSED_KEY = "seat_map_sidebar_collapsed";
+export const ADMIN_MODE_KEY = "seat_map_admin_mode";
 
 export const DEFAULT_CONFIG: SeatMapConfig = {
   brand: "",
@@ -114,5 +115,20 @@ export function loadSidebarCollapsed(): boolean {
 export function writeSidebarCollapsed(collapsed: boolean) {
   try {
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
+  } catch {}
+}
+
+// 관리자 모드 토글 (관리자 계정에서만 효과) — 기본 OFF, 켜면 지속
+export function loadAdminMode(): boolean {
+  try {
+    return localStorage.getItem(ADMIN_MODE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function writeAdminMode(on: boolean) {
+  try {
+    localStorage.setItem(ADMIN_MODE_KEY, on ? "1" : "0");
   } catch {}
 }

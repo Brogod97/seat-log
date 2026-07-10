@@ -15,6 +15,7 @@ import { useSidebarLayout } from "./hooks/useSidebarLayout";
 import { useSavedConfigs } from "./hooks/useSavedConfigs";
 import { useTheaterLayoutPreset } from "./hooks/useTheaterLayoutPreset";
 import { useImageDownload } from "./hooks/useImageDownload";
+import { loadAdminMode, writeAdminMode } from "./utils/storage";
 
 function App() {
   const {
@@ -65,13 +66,23 @@ function App() {
     exportJson,
     importJson,
   } = useSavedConfigs({ config, setConfig, setEditMode });
+  // 관리자 모드 토글 (관리자 계정이어도 꺼져 있으면 일반 사용자로 동작) — 지속
+  const [adminMode, setAdminMode] = useState(loadAdminMode);
+  function toggleAdminMode() {
+    setAdminMode((v) => {
+      const next = !v;
+      writeAdminMode(next);
+      return next;
+    });
+  }
   const {
     isAdmin,
+    accountIsAdmin,
     publicTheaters,
     catalogLoading,
     presetExists,
     publishPreset,
-  } = useTheaterLayoutPreset({ user, config, setConfig });
+  } = useTheaterLayoutPreset({ user, config, setConfig, adminMode });
   const [mobileEditOpen, setMobileEditOpen] = useState(false);
   // 모바일 오버레이 화면 (시안 3): 좌석 설정 / 레이아웃 / 복도·제외 / 출입구
   const [mobileScreen, setMobileScreen] = useState<
@@ -223,6 +234,31 @@ function App() {
             onLogin={login}
             onLogout={logout}
           />
+
+          {/* 관리자 모드 토글 — 관리자 계정에서만 노출. OFF면 일반 사용자와 동일 */}
+          {accountIsAdmin && (
+            <button
+              type="button"
+              onClick={toggleAdminMode}
+              className={`w-full mb-3 flex items-center justify-between px-3 py-2 rounded-xl border text-xs font-medium transition-colors ${
+                adminMode
+                  ? "btn-accent border-transparent"
+                  : "border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+              }`}
+              title="관리자 모드를 끄면 일반 사용자 화면으로 전환돼요"
+            >
+              <span>관리자 모드</span>
+              <span
+                className={`text-[11px] px-1.5 py-0.5 rounded-full ${
+                  adminMode
+                    ? "bg-white/25"
+                    : "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-400"
+                }`}
+              >
+                {adminMode ? "ON" : "OFF"}
+              </span>
+            </button>
+          )}
 
           <SavedList
             saves={saves}
