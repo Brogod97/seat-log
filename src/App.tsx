@@ -60,9 +60,9 @@ function App() {
   } = useSavedConfigs({ config, setConfig, setEditMode });
   const {
     isAdmin,
+    publicTheaters,
+    catalogLoading,
     presetExists,
-    presetLoading,
-    loadPreset,
     publishPreset,
   } = useTheaterLayoutPreset({ user, config, setConfig });
   const [mobileEditOpen, setMobileEditOpen] = useState(false);
@@ -252,9 +252,9 @@ function App() {
           onCancelEditMode={cancelEditMode}
           onCompleteEditMode={completeEditMode}
           isAdmin={isAdmin}
+          publicTheaters={publicTheaters}
+          catalogLoading={catalogLoading}
           presetExists={presetExists}
-          presetLoading={presetLoading}
-          onLoadPreset={loadPreset}
           onPublishPreset={publishPreset}
         />
 

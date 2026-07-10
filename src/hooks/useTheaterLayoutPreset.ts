@@ -1,11 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { User } from "firebase/auth";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDocs,
+  setDoc,
+  serverTimestamp,
+} from "firebase/firestore";
 import { db } from "../firebase";
 import { isAdmin as checkIsAdmin } from "../utils/admin";
 import { isKnownBranch, isKnownScreen } from "../data/theaters";
-import { configKey } from "../utils/storage";
+import { configKey, DEFAULT_CONFIG } from "../utils/storage";
 import type { SeatMapConfig, TheaterLayoutPreset } from "../types";
 
 interface Params {
@@ -14,75 +20,102 @@ interface Params {
   setConfig: Dispatch<SetStateAction<SeatMapConfig>>;
 }
 
-// 관리자가 게시한 지점 공용 레이아웃(theaterLayouts) 조회/불러오기/게시
+export interface PublicTheaterData {
+  branches: string[];
+  screensByBranch: Record<string, string[]>;
+}
+
+const COLLECTION = "theaterLayouts";
+
+// 관리자가 게시한 지점 공용 레이아웃 전체를 한 번에 불러와(catalog) select 옵션 구성 + 자동 적용/게시에 사용
 export function useTheaterLayoutPreset({ user, config, setConfig }: Params) {
-  const [presetExists, setPresetExists] = useState(false);
-  const [presetLoading, setPresetLoading] = useState(false);
-  const presetDataRef = useRef<TheaterLayoutPreset | null>(null);
-  const requestedKeyRef = useRef<string | null>(null);
+  const [catalog, setCatalog] = useState<Record<string, TheaterLayoutPreset>>(
+    {},
+  );
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  // 비동기 응답 시점의 최신 config를 보기 위한 ref (effect 클로저는 선택 변경 시점 값이라 stale할 수 있음)
+  const configRef = useRef(config);
+  useEffect(() => {
+    configRef.current = config;
+  }, [config]);
 
   const admin = checkIsAdmin(user);
   const isKnownSelection =
     isKnownBranch(config.brand, config.branch) &&
     isKnownScreen(config.brand, config.screen);
 
-  useEffect(() => {
-    if (!isKnownSelection) {
-      presetDataRef.current = null;
-      requestedKeyRef.current = null;
-      return;
-    }
-    const key = configKey(config);
-    requestedKeyRef.current = key;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- 조회 시작을 알리는 로딩 표시, 프로젝트 내 기존 fetch 훅과 동일 패턴
-    setPresetLoading(true);
-    getDoc(doc(db, "theaterLayouts", key))
+  function fetchCatalog() {
+    setCatalogLoading(true);
+    return getDocs(collection(db, COLLECTION))
       .then((snap) => {
-        if (requestedKeyRef.current !== key) return; // 늦게 온 응답 무시
-        if (snap.exists()) {
-          presetDataRef.current = snap.data() as TheaterLayoutPreset;
-          setPresetExists(true);
-        } else {
-          presetDataRef.current = null;
-          setPresetExists(false);
-        }
+        const map: Record<string, TheaterLayoutPreset> = {};
+        snap.forEach((d) => {
+          map[d.id] = d.data() as TheaterLayoutPreset;
+        });
+        setCatalog(map);
       })
       .catch((e) => {
-        console.error("지점 레이아웃 조회 실패", e);
-        presetDataRef.current = null;
-        setPresetExists(false);
+        console.error("공용 지점 레이아웃 목록 조회 실패", e);
       })
-      .finally(() => {
-        if (requestedKeyRef.current === key) setPresetLoading(false);
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config.brand, config.branch, config.screen]);
+      .finally(() => setCatalogLoading(false));
+  }
 
-  function loadPreset() {
-    const preset = presetDataRef.current;
-    if (!preset) return;
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 마운트 시 1회 카탈로그 조회 시작, 기존 fetch 훅과 동일 패턴
+    fetchCatalog();
+  }, []);
+
+  const publicTheaters = useMemo(() => {
+    const result: Record<string, PublicTheaterData> = {};
+    for (const preset of Object.values(catalog)) {
+      const brandEntry = (result[preset.brand] ??= {
+        branches: [],
+        screensByBranch: {},
+      });
+      if (!brandEntry.branches.includes(preset.branch))
+        brandEntry.branches.push(preset.branch);
+      const screens = (brandEntry.screensByBranch[preset.branch] ??= []);
+      if (!screens.includes(preset.screen)) screens.push(preset.screen);
+    }
+    return result;
+  }, [catalog]);
+
+  function applyPhysicalLayout(preset: TheaterLayoutPreset | null) {
+    const c = configRef.current;
     const hasPersonalData =
-      config.sightRows.length > 0 ||
-      config.primeRanges.length > 0 ||
-      config.watchedSeats.length > 0;
+      c.sightRows.length > 0 ||
+      c.primeRanges.length > 0 ||
+      c.watchedSeats.length > 0;
     if (
       hasPersonalData &&
-      !confirm("지점 레이아웃을 불러오면 현재 시선일치/명당/실관람 표시가 초기화돼요. 계속할까요?")
+      !confirm(
+        "지점을 변경하면 현재 시선일치/명당/실관람 표시가 초기화돼요. 계속할까요?",
+      )
     )
       return;
-    setConfig((c) => ({
-      ...c,
-      rows: preset.rows,
-      cols: preset.cols,
-      rowAisles: preset.rowAisles,
-      colAisles: preset.colAisles,
-      excludedSeats: preset.excludedSeats,
-      exits: preset.exits,
+    setConfig((cur) => ({
+      ...cur,
+      rows: preset?.rows ?? DEFAULT_CONFIG.rows,
+      cols: preset?.cols ?? DEFAULT_CONFIG.cols,
+      rowAisles: preset?.rowAisles ?? [],
+      colAisles: preset?.colAisles ?? [],
+      excludedSeats: preset?.excludedSeats ?? [],
+      exits: preset?.exits ?? [],
       sightRows: [],
       primeRanges: [],
       watchedSeats: [],
     }));
   }
+
+  // 선택(브랜드/지점/상영관)이 바뀌면 카탈로그에서 동기적으로 조회해 적용(있으면 프리셋, 없으면 빈 레이아웃)
+  useEffect(() => {
+    if (catalogLoading || !isKnownSelection) return;
+    const preset = catalog[configKey(config)] ?? null;
+    applyPhysicalLayout(preset);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.brand, config.branch, config.screen, catalogLoading]);
+
+  const presetExists = isKnownSelection && !!catalog[configKey(config)];
 
   async function publishPreset() {
     if (!admin || !isKnownSelection) return;
@@ -99,13 +132,12 @@ export function useTheaterLayoutPreset({ user, config, setConfig }: Params) {
       exits: config.exits,
     };
     try {
-      await setDoc(doc(db, "theaterLayouts", key), {
+      await setDoc(doc(db, COLLECTION, key), {
         ...preset,
         updatedAt: serverTimestamp(),
         updatedBy: user?.uid ?? null,
       });
-      presetDataRef.current = preset;
-      setPresetExists(true);
+      setCatalog((c) => ({ ...c, [key]: preset }));
     } catch (e) {
       console.error("지점 레이아웃 게시 실패", e);
       alert("게시에 실패했어요.");
@@ -114,9 +146,10 @@ export function useTheaterLayoutPreset({ user, config, setConfig }: Params) {
 
   return {
     isAdmin: admin,
-    presetExists: isKnownSelection && presetExists,
-    presetLoading: isKnownSelection && presetLoading,
-    loadPreset,
+    publicTheaters,
+    catalogLoading,
+    presetExists,
     publishPreset,
+    refetchCatalog: fetchCatalog,
   };
 }

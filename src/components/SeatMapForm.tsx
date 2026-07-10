@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { indexToLabel } from '../utils/rowLabel'
 import { THEATERS, BRAND_LIST, CUSTOM, isKnownBranch, isKnownScreen } from '../data/theaters'
 import { FREQ_KEY } from '../utils/storage'
+import type { PublicTheaterData } from '../hooks/useTheaterLayoutPreset'
 
 interface Props {
   config: SeatMapConfig
@@ -13,9 +14,9 @@ interface Props {
   onCancelEditMode: () => void
   onCompleteEditMode: () => void
   isAdmin: boolean
+  publicTheaters: Record<string, PublicTheaterData>
+  catalogLoading: boolean
   presetExists: boolean
-  presetLoading: boolean
-  onLoadPreset: () => void
   onPublishPreset: () => void
 }
 
@@ -68,7 +69,7 @@ function EditModeButton({
 export default function SeatMapForm({
   config, onChange, editMode,
   onEnterEditMode, onEnterGridResize, onCancelEditMode, onCompleteEditMode,
-  isAdmin, presetExists, presetLoading, onLoadPreset, onPublishPreset,
+  isAdmin, publicTheaters, catalogLoading, presetExists, onPublishPreset,
 }: Props) {
   function update(partial: Partial<SeatMapConfig>) {
     onChange({ ...config, ...partial })
@@ -88,15 +89,23 @@ export default function SeatMapForm({
   return (
     <div>
       {/* 영화관 선택 */}
-      <TheaterSelector config={config} update={update} />
+      <TheaterSelector
+        config={config}
+        update={update}
+        isAdmin={isAdmin}
+        publicTheaters={publicTheaters}
+        catalogLoading={catalogLoading}
+      />
 
-      {/* 관리자 공용 레이아웃 불러오기 */}
-      {editMode === null && !presetLoading && presetExists && (
-        <div className="mb-3 flex items-center justify-between px-3 py-2 bg-accent-soft rounded text-xs text-accent">
-          <span>이 상영관의 저장된 레이아웃이 있어요</span>
-          <button type="button" onClick={onLoadPreset} className="font-medium underline hover:no-underline">
-            불러오기
-          </button>
+      {/* 관리자 공용 레이아웃 — 선택 시 자동으로 불러와짐 */}
+      {editMode === null && config.brand && catalogLoading && (
+        <div className="mb-3 px-3 py-2 bg-accent-soft rounded text-xs text-accent">
+          지점 레이아웃을 불러오는 중…
+        </div>
+      )}
+      {editMode === null && !catalogLoading && presetExists && (
+        <div className="mb-3 px-3 py-2 bg-accent-soft rounded text-xs text-accent">
+          이 상영관의 저장된 레이아웃을 불러왔어요
         </div>
       )}
 
@@ -261,19 +270,33 @@ function getTopBranches(brand: string, all: string[]): string[] {
 function TheaterSelector({
   config,
   update,
+  isAdmin,
+  publicTheaters,
+  catalogLoading,
 }: {
   config: SeatMapConfig
   update: (p: Partial<SeatMapConfig>) => void
+  isAdmin: boolean
+  publicTheaters: Record<string, PublicTheaterData>
+  catalogLoading: boolean
 }) {
-  const theaterData = config.brand ? THEATERS[config.brand] : null
-  const allBranches = theaterData ? theaterData.branches : []
-  const branches = [...allBranches, CUSTOM]
-  const screens = theaterData ? [...theaterData.screens, CUSTOM] : [CUSTOM]
+  // 관리자: 정적 전체 목록(어떤 지점이든 새로 게시 가능) / 일반: 실제 게시된 것만(막다른 선택 방지)
+  const brandList = isAdmin ? BRAND_LIST : Object.keys(publicTheaters)
+  const allBranches = isAdmin
+    ? (config.brand ? (THEATERS[config.brand]?.branches ?? []) : [])
+    : (config.brand ? (publicTheaters[config.brand]?.branches ?? []) : [])
+  const allScreens = isAdmin
+    ? (config.brand ? (THEATERS[config.brand]?.screens ?? []) : [])
+    : (config.brand && config.branch ? (publicTheaters[config.brand]?.screensByBranch[config.branch] ?? []) : [])
+  const branches = isAdmin ? [...allBranches, CUSTOM] : allBranches
+  const screens = isAdmin ? [...allScreens, CUSTOM] : allScreens
 
   const topBranches = config.brand ? getTopBranches(config.brand, allBranches) : []
 
-  const isBranchCustom = config.branch === CUSTOM || (!!config.branch && !isKnownBranch(config.brand, config.branch))
-  const isScreenCustom = config.screen === CUSTOM || (!!config.screen && !isKnownScreen(config.brand, config.screen))
+  const isBranchCustom = isAdmin && (config.branch === CUSTOM || (!!config.branch && !isKnownBranch(config.brand, config.branch)))
+  const isScreenCustom = isAdmin && (config.screen === CUSTOM || (!!config.screen && !isKnownScreen(config.brand, config.screen)))
+
+  const screenSelectDisabled = isAdmin ? !config.brand : (!config.brand || !config.branch)
 
   function handleBrandChange(brand: string) {
     update({ brand, branch: '', screen: '' })
@@ -281,7 +304,7 @@ function TheaterSelector({
 
   function handleBranchChange(value: string) {
     if (value !== CUSTOM && value !== '') recordBranchSelection(config.brand, value)
-    update({ branch: value })
+    update({ branch: value, screen: '' })
   }
 
   function handleScreenChange(value: string) {
@@ -293,22 +316,28 @@ function TheaterSelector({
       {/* 브랜드 */}
       <div className="mb-3">
         <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">영화관</label>
-        <div className="flex gap-1 flex-wrap">
-          {BRAND_LIST.map((b) => (
-            <button
-              key={b}
-              type="button"
-              onClick={() => handleBrandChange(b)}
-              className={`px-3 py-1 rounded-full text-xs border transition-colors ${
-                config.brand === b
-                  ? 'btn-accent border-transparent font-medium'
-                  : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-gray-500'
-              }`}
-            >
-              {b}
-            </button>
-          ))}
-        </div>
+        {!isAdmin && catalogLoading ? (
+          <p className="text-xs text-gray-400 dark:text-gray-500">불러오는 중…</p>
+        ) : !isAdmin && brandList.length === 0 ? (
+          <p className="text-xs text-gray-400 dark:text-gray-500">아직 등록된 지점이 없어요</p>
+        ) : (
+          <div className="flex gap-1 flex-wrap">
+            {brandList.map((b) => (
+              <button
+                key={b}
+                type="button"
+                onClick={() => handleBrandChange(b)}
+                className={`px-3 py-1 rounded-full text-xs border transition-colors ${
+                  config.brand === b
+                    ? 'btn-accent border-transparent font-medium'
+                    : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-gray-500'
+                }`}
+              >
+                {b}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* 지점 / 상영관 — 나란히 (시안 2a) */}
@@ -347,7 +376,7 @@ function TheaterSelector({
           <select
             value={isScreenCustom ? CUSTOM : config.screen}
             onChange={(e) => handleScreenChange(e.target.value)}
-            disabled={!config.brand}
+            disabled={screenSelectDisabled}
             className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-2 py-1.5 text-sm disabled:bg-gray-50 dark:disabled:bg-gray-800 disabled:text-gray-400"
           >
             <option value="">선택</option>
