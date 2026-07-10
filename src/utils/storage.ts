@@ -8,6 +8,8 @@ export const LAST_SAVED_KEY = "seat_map_last_saved";
 export const FREQ_KEY = "seat_map_branch_freq";
 export const OWNER_KEY = "seat_map_owner";
 export const ANON_OWNER = "anon";
+export const SIDEBAR_WIDTH_KEY = "seat_map_sidebar_width";
+export const SIDEBAR_COLLAPSED_KEY = "seat_map_sidebar_collapsed";
 
 export const DEFAULT_CONFIG: SeatMapConfig = {
   brand: "",
@@ -76,12 +78,41 @@ export function writeOwner(id: string) {
   } catch {}
 }
 
-// 계정 전환(로그아웃/소유자 불일치) 시 개인 데이터 정리 — 테마 설정은 유지
+// 계정 전환(로그아웃/소유자 불일치) 시 개인 데이터 정리 — 테마/사이드바 같은 UI 설정은 유지
 export function clearLocalPersonalData() {
   try {
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(SAVES_KEY);
     localStorage.removeItem(LAST_SAVED_KEY);
     localStorage.removeItem(FREQ_KEY);
+  } catch {}
+}
+
+export function loadSidebarWidth(fallback: number): number {
+  try {
+    const v = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY));
+    return v > 0 ? v : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export function writeSidebarWidth(width: number) {
+  try {
+    localStorage.setItem(SIDEBAR_WIDTH_KEY, String(width));
+  } catch {}
+}
+
+export function loadSidebarCollapsed(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function writeSidebarCollapsed(collapsed: boolean) {
+  try {
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
   } catch {}
 }

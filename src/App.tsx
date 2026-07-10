@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import type { CSSProperties } from "react";
 import SeatMapForm from "./components/SeatMapForm";
 import { themeFor } from "./theme";
-import { SunIcon, MoonIcon, ResetIcon } from "./components/icons";
+import { SunIcon, MoonIcon, ResetIcon, ChevronIcon } from "./components/icons";
 import { AccountCard } from "./components/sidebar/AccountCard";
 import { SavedList } from "./components/sidebar/SavedList";
 import { PreviewArea } from "./components/preview/PreviewArea";
@@ -11,6 +11,7 @@ import { useTheme } from "./hooks/useTheme";
 import { useCompact } from "./hooks/useCompact";
 import { useFitScale } from "./hooks/useFitScale";
 import { useSeatMapConfig } from "./hooks/useSeatMapConfig";
+import { useSidebarLayout } from "./hooks/useSidebarLayout";
 import { useSavedConfigs } from "./hooks/useSavedConfigs";
 import { useTheaterLayoutPreset } from "./hooks/useTheaterLayoutPreset";
 import { useImageDownload } from "./hooks/useImageDownload";
@@ -44,6 +45,12 @@ function App() {
   } = useSeatMapConfig();
   const { theme, setTheme } = useTheme();
   const compact = useCompact();
+  const {
+    width: sidebarWidth,
+    collapsed: sidebarCollapsed,
+    toggleCollapsed: toggleSidebarCollapsed,
+    startResize,
+  } = useSidebarLayout();
   const {
     saves,
     user,
@@ -152,7 +159,22 @@ function App() {
         } as CSSProperties
       }
     >
-      <aside className="order-2 lg:landscape:order-1 w-full lg:landscape:w-80 shrink-0 bg-white dark:bg-gray-800 border-t lg:landscape:border-t-0 lg:landscape:border-r border-gray-200 dark:border-gray-700 p-4 lg:landscape:p-6 lg:landscape:overflow-y-auto">
+      <aside
+        className="order-2 lg:landscape:order-1 w-full shrink-0 bg-white dark:bg-gray-800 border-t lg:landscape:border-t-0 lg:landscape:border-r border-gray-200 dark:border-gray-700 p-4 lg:landscape:p-6 lg:landscape:overflow-y-auto"
+        style={
+          !compact
+            ? {
+                width: sidebarCollapsed ? 0 : sidebarWidth,
+                minWidth: sidebarCollapsed ? 0 : undefined,
+                overflow: sidebarCollapsed ? "hidden" : undefined,
+                padding: sidebarCollapsed ? 0 : undefined,
+                borderWidth: sidebarCollapsed ? 0 : undefined,
+              }
+            : undefined
+        }
+      >
+      {(compact || !sidebarCollapsed) && (
+        <>
         <div className="flex items-center justify-between mb-4">
           <h1 className="flex items-center gap-2 text-lg font-bold text-gray-800 dark:text-gray-100">
             <img
@@ -271,7 +293,33 @@ function App() {
             ↓ 이미지 다운로드
           </button>
         </div>
+        </>
+      )}
       </aside>
+
+      {/* 사이드바 리사이즈 핸들 + 접기/펼치기 버튼 (데스크톱 전용) */}
+      {!compact && (
+        <div className="relative w-0 shrink-0 hidden lg:landscape:order-1 lg:landscape:block">
+          {!sidebarCollapsed && (
+            <div
+              onMouseDown={startResize}
+              className="absolute top-0 bottom-0 -left-1 w-2 cursor-col-resize group z-10"
+            >
+              <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-gray-200 dark:bg-gray-700 group-hover:bg-accent transition-colors" />
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={toggleSidebarCollapsed}
+            title={sidebarCollapsed ? "사이드바 펼치기" : "사이드바 접기"}
+            className="absolute top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 shadow-sm z-10"
+            style={{ left: sidebarCollapsed ? 4 : -12 }}
+          >
+            <ChevronIcon size={12} className={sidebarCollapsed ? "" : "rotate-180"} />
+          </button>
+        </div>
+      )}
+
       <main
         className="order-1 lg:landscape:order-2 flex-1 p-2 lg:landscape:p-6 lg:landscape:overflow-auto lg:landscape:h-screen"
         onClick={() => {

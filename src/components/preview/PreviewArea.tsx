@@ -25,16 +25,16 @@ export function PreviewArea({
     // 가용 영역 측정용 (좌우 분할 시 높이까지 채움)
     <div
       ref={fitAreaRef}
-      className="w-full lg:landscape:h-full overflow-hidden"
+      className="w-full lg:landscape:h-full overflow-hidden flex items-center justify-center"
       style={{ height: compact ? fitHeight : undefined }}
     >
-      {/* transform으로 확대/축소 (추출엔 미반영) */}
+      {/* transform으로 확대/축소 (추출엔 미반영). 중앙 기준 스케일이라 확대/축소해도 중앙 정렬 유지 */}
       <div
         ref={fitContentRef}
         className="inline-block"
         style={{
           transform: `scale(${fitScale})`,
-          transformOrigin: "top left",
+          transformOrigin: "center",
         }}
       >
         {/* 점선 테두리는 미리보기용 — ref는 안쪽 카드에 있어 PNG에는 미포함 */}
