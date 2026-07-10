@@ -5,6 +5,9 @@ export const STORAGE_KEY = "seat_map_current";
 export const SAVES_KEY = "seat_map_saves";
 export const THEME_KEY = "seat_map_theme";
 export const LAST_SAVED_KEY = "seat_map_last_saved";
+export const FREQ_KEY = "seat_map_branch_freq";
+export const OWNER_KEY = "seat_map_owner";
+export const ANON_OWNER = "anon";
 
 export const DEFAULT_CONFIG: SeatMapConfig = {
   brand: "",
@@ -55,5 +58,30 @@ export function loadSaves(): Record<string, SeatMapConfig> {
 export function writeSaves(saves: Record<string, SeatMapConfig>) {
   try {
     localStorage.setItem(SAVES_KEY, JSON.stringify(saves));
+  } catch {}
+}
+
+// 지금 로컬 데이터가 누구 것인지 표시하는 마커 (uid 또는 ANON_OWNER) — 계정 전환 시 로컬 오염 감지용
+export function loadOwner(): string | null {
+  try {
+    return localStorage.getItem(OWNER_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function writeOwner(id: string) {
+  try {
+    localStorage.setItem(OWNER_KEY, id);
+  } catch {}
+}
+
+// 계정 전환(로그아웃/소유자 불일치) 시 개인 데이터 정리 — 테마 설정은 유지
+export function clearLocalPersonalData() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(SAVES_KEY);
+    localStorage.removeItem(LAST_SAVED_KEY);
+    localStorage.removeItem(FREQ_KEY);
   } catch {}
 }

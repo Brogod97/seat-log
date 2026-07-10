@@ -18,9 +18,13 @@ import type { SeatMapConfig, EditMode } from "../types";
 import {
   LAST_SAVED_KEY,
   DEFAULT_CONFIG,
+  ANON_OWNER,
   configKey,
   loadSaves,
   writeSaves,
+  loadOwner,
+  writeOwner,
+  clearLocalPersonalData,
 } from "../utils/storage";
 
 interface Params {
@@ -66,6 +70,17 @@ export function useSavedConfigs({ config, setConfig, setEditMode }: Params) {
         unsubSnapRef.current = null;
       }
       if (!u) return;
+      // 로그아웃 없이 다른 계정으로 전환 로그인한 경우(예: 로그인 팝업에서 다른 계정 선택)
+      // 방어적으로 이전 계정의 로컬 개인 데이터를 정리 — 명시적 로그아웃은 logout()에서 처리
+      const owner = loadOwner();
+      if (owner && owner !== ANON_OWNER && owner !== u.uid) {
+        clearLocalPersonalData();
+        setSaves({});
+        setConfig(DEFAULT_CONFIG);
+        setEditMode(null);
+        setLastSavedAt(null);
+      }
+      writeOwner(u.uid);
       const ref = savesDoc(u.uid);
       try {
         // 최초: 로컬 + 원격 병합 (원격 우선), 다시 업로드
@@ -93,7 +108,7 @@ export function useSavedConfigs({ config, setConfig, setEditMode }: Params) {
       unsubAuth();
       if (unsubSnapRef.current) unsubSnapRef.current();
     };
-  }, []);
+  }, [setConfig, setEditMode]);
 
   async function login() {
     try {
@@ -109,6 +124,13 @@ export function useSavedConfigs({ config, setConfig, setEditMode }: Params) {
     }
   }
   async function logout() {
+    // 명시적 로그아웃 — 이 기기에 남은 개인 데이터를 확실히 정리(다음 사용자에게 안 새어나가게)
+    clearLocalPersonalData();
+    setSaves({});
+    setConfig(DEFAULT_CONFIG);
+    setEditMode(null);
+    setLastSavedAt(null);
+    writeOwner(ANON_OWNER);
     await signOut(auth);
   }
 

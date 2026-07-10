@@ -2,6 +2,7 @@ import type { SeatMapConfig, EditMode } from '../types'
 import { useState } from 'react'
 import { indexToLabel } from '../utils/rowLabel'
 import { THEATERS, BRAND_LIST, CUSTOM, isKnownBranch, isKnownScreen } from '../data/theaters'
+import { FREQ_KEY } from '../utils/storage'
 
 interface Props {
   config: SeatMapConfig
@@ -233,7 +234,6 @@ export default function SeatMapForm({
   )
 }
 
-const FREQ_KEY = 'seat_map_branch_freq'
 const TOP_N = 3
 
 function loadFreq(): Record<string, number> {
