@@ -5,5 +5,12 @@ service cloud.firestore {
     match /users/{uid}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
+
+    // 관리자가 게시한 지점 공용 좌석 레이아웃 — 누구나 읽기, 관리자만 쓰기
+    // UID 목록은 src/utils/admin.ts의 ADMIN_UIDS와 동일하게 유지 (이메일 대신 UID — 개인정보 미노출)
+    match /theaterLayouts/{key} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid in ['VS4QAYyaTpgJBDVjCGBkJ3yvEWl2'];
+    }
   }
 }

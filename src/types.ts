@@ -35,3 +35,16 @@ export interface Seat {
 }
 
 export type EditMode = 'layout' | 'prime' | 'watched' | null
+
+// 관리자가 게시하는 지점 공용 좌석 레이아웃 (물리 구조만, 개인 리뷰 데이터 제외)
+export interface TheaterLayoutPreset {
+  brand: string
+  branch: string
+  screen: string
+  rows: number
+  cols: number
+  rowAisles: number[]
+  colAisles: number[]
+  excludedSeats: Seat[]
+  exits: ExitMarker[]
+}

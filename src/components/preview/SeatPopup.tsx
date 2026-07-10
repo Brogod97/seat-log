@@ -15,13 +15,14 @@ interface SeatPopupProps {
   onToggleSightRow: (row: number) => void
   onToggleExcludedSeat: (row: number, col: number) => void
   onToggleExit: (row: number, col: number, side: ExitSide) => void
+  isAdmin: boolean
   onHoverHint: (hint: HighlightHint) => void
   onClose: () => void
   sheet?: boolean  // 바텀시트로 렌더 (모바일)
 }
 
 export const SeatPopup = forwardRef<HTMLDivElement, SeatPopupProps>(
-  ({ popup, config, centerCols, onEnterModeFrom, onRemovePrimeRange, onToggleWatchedSeat, onSetWatchedMemo, onToggleSightRow, onToggleExcludedSeat, onToggleExit, onHoverHint, onClose, sheet = false }, ref) => {
+  ({ popup, config, centerCols, onEnterModeFrom, onRemovePrimeRange, onToggleWatchedSeat, onSetWatchedMemo, onToggleSightRow, onToggleExcludedSeat, onToggleExit, isAdmin, onHoverHint, onClose, sheet = false }, ref) => {
     const { row, col, x, y } = popup
     const innerRef = useRef<HTMLDivElement | null>(null)
     const [pos, setPos] = useState({ left: x + 8, top: y + 8 })
@@ -77,12 +78,12 @@ export const SeatPopup = forwardRef<HTMLDivElement, SeatPopupProps>(
       { label: isSightRow ? '시선일치행 해제' : '시선일치행 설정', dot: 'bg-green-400', action: () => { onToggleSightRow(row); onClose() } },
       { label: '명당 범위 설정', dot: 'bg-red-300', action: () => { onClose(); onEnterModeFrom('prime', { row, col }) } },
       { label: '실관람 좌석 설정', dot: 'bg-yellow-400', action: () => { onClose(); onEnterModeFrom('watched', { row, col }) } },
-      ...exitSideOptions.map(({ side, label }) => ({
+      ...(isAdmin ? exitSideOptions.map(({ side, label }) => ({
         label: `출입구(${label}) ${hasExit(side) ? '해제' : '표시'}`,
         dot: 'bg-gray-500',
         action: () => { onToggleExit(row, col, side); onClose() },
-      })),
-      isExcluded ? { label: '제외 해제', action: () => { onToggleExcludedSeat(row, col); onClose() } } : null,
+      })) : []),
+      isAdmin && isExcluded ? { label: '제외 해제', action: () => { onToggleExcludedSeat(row, col); onClose() } } : null,
       isCenter ? { info: true, label: '중앙열 (자동 계산)' } : null,
     ].filter(Boolean) as Row[]
 

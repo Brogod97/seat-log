@@ -1,7 +1,7 @@
 import type { SeatMapConfig, EditMode } from '../types'
 import { useState } from 'react'
 import { indexToLabel } from '../utils/rowLabel'
-import { THEATERS, BRAND_LIST } from '../data/theaters'
+import { THEATERS, BRAND_LIST, CUSTOM, isKnownBranch, isKnownScreen } from '../data/theaters'
 
 interface Props {
   config: SeatMapConfig
@@ -11,6 +11,11 @@ interface Props {
   onEnterGridResize: () => void
   onCancelEditMode: () => void
   onCompleteEditMode: () => void
+  isAdmin: boolean
+  presetExists: boolean
+  presetLoading: boolean
+  onLoadPreset: () => void
+  onPublishPreset: () => void
 }
 
 type BtnColor = 'red' | 'yellow' | 'green' | 'indigo' | 'gray'
@@ -62,6 +67,7 @@ function EditModeButton({
 export default function SeatMapForm({
   config, onChange, editMode,
   onEnterEditMode, onEnterGridResize, onCancelEditMode, onCompleteEditMode,
+  isAdmin, presetExists, presetLoading, onLoadPreset, onPublishPreset,
 }: Props) {
   function update(partial: Partial<SeatMapConfig>) {
     onChange({ ...config, ...partial })
@@ -76,55 +82,77 @@ export default function SeatMapForm({
     onComplete: onCompleteEditMode,
   }
 
+  const isKnownSelection = isKnownBranch(config.brand, config.branch) && isKnownScreen(config.brand, config.screen)
+
   return (
     <div>
       {/* 영화관 선택 */}
       <TheaterSelector config={config} update={update} />
 
-      <hr className="my-4 border-gray-200 dark:border-gray-700" />
+      {/* 관리자 공용 레이아웃 불러오기 */}
+      {editMode === null && !presetLoading && presetExists && (
+        <div className="mb-3 flex items-center justify-between px-3 py-2 bg-accent-soft rounded text-xs text-accent">
+          <span>이 상영관의 저장된 레이아웃이 있어요</span>
+          <button type="button" onClick={onLoadPreset} className="font-medium underline hover:no-underline">
+            불러오기
+          </button>
+        </div>
+      )}
 
-      {/* 레이아웃 (그리드 크기 + 복도 + 제외 영역 통합) */}
-      <div className="mb-4">
-        <div className="flex items-center justify-between mb-2">
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-200">레이아웃</label>
-          <div className="flex gap-1 items-center">
-            {editMode === null && (
-              <button type="button" onClick={onEnterGridResize}
-                className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                초기화
-              </button>
-            )}
-            <EditModeButton label="편집" color="indigo" mode="layout" active={editMode === 'layout'} {...btnProps} />
+      {isAdmin && (
+        <>
+          <hr className="my-4 border-gray-200 dark:border-gray-700" />
+
+          {/* 레이아웃 (그리드 크기 + 복도 + 제외 영역 통합) — 관리자 전용, 물리 구조는 관리자만 편집 */}
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-200">레이아웃</label>
+              <div className="flex gap-1 items-center">
+                {editMode === null && isKnownSelection && (
+                  <button type="button" onClick={onPublishPreset}
+                    className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                    관리자: 게시
+                  </button>
+                )}
+                {editMode === null && (
+                  <button type="button" onClick={onEnterGridResize}
+                    className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                    초기화
+                  </button>
+                )}
+                <EditModeButton label="편집" color="indigo" mode="layout" active={editMode === 'layout'} {...btnProps} />
+              </div>
+            </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{config.rows}행 × {config.cols}열</p>
+            <div className="flex flex-wrap gap-1">
+              {config.rowAisles.map((v) => (
+                <span key={`r${v}`} className="inline-flex items-center gap-1 px-2 py-0.5 bg-accent-soft text-accent text-xs rounded font-medium">
+                  {indexToLabel(v - 1)}행↓
+                  <button type="button" onClick={() => update({ rowAisles: config.rowAisles.filter((x) => x !== v) })} className="hover:text-red-600">×</button>
+                </span>
+              ))}
+              {config.colAisles.map((v) => (
+                <span key={`c${v}`} className="inline-flex items-center gap-1 px-2 py-0.5 bg-accent-soft text-accent text-xs rounded font-medium">
+                  {v}열→
+                  <button type="button" onClick={() => update({ colAisles: config.colAisles.filter((x) => x !== v) })} className="hover:text-red-600">×</button>
+                </span>
+              ))}
+              {config.excludedSeats.length > 0 && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">
+                  제외 {config.excludedSeats.length}석
+                  <button type="button" onClick={() => update({ excludedSeats: [] })} className="hover:text-red-600">×</button>
+                </span>
+              )}
+              {config.exits.length > 0 && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">
+                  출입구 {config.exits.length}곳
+                  <button type="button" onClick={() => update({ exits: [] })} className="hover:text-red-600">×</button>
+                </span>
+              )}
+            </div>
           </div>
-        </div>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{config.rows}행 × {config.cols}열</p>
-        <div className="flex flex-wrap gap-1">
-          {config.rowAisles.map((v) => (
-            <span key={`r${v}`} className="inline-flex items-center gap-1 px-2 py-0.5 bg-accent-soft text-accent text-xs rounded font-medium">
-              {indexToLabel(v - 1)}행↓
-              <button type="button" onClick={() => update({ rowAisles: config.rowAisles.filter((x) => x !== v) })} className="hover:text-red-600">×</button>
-            </span>
-          ))}
-          {config.colAisles.map((v) => (
-            <span key={`c${v}`} className="inline-flex items-center gap-1 px-2 py-0.5 bg-accent-soft text-accent text-xs rounded font-medium">
-              {v}열→
-              <button type="button" onClick={() => update({ colAisles: config.colAisles.filter((x) => x !== v) })} className="hover:text-red-600">×</button>
-            </span>
-          ))}
-          {config.excludedSeats.length > 0 && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">
-              제외 {config.excludedSeats.length}석
-              <button type="button" onClick={() => update({ excludedSeats: [] })} className="hover:text-red-600">×</button>
-            </span>
-          )}
-          {config.exits.length > 0 && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">
-              출입구 {config.exits.length}곳
-              <button type="button" onClick={() => update({ exits: [] })} className="hover:text-red-600">×</button>
-            </span>
-          )}
-        </div>
-      </div>
+        </>
+      )}
 
       <hr className="my-4 border-gray-200 dark:border-gray-700" />
 
@@ -205,7 +233,6 @@ export default function SeatMapForm({
   )
 }
 
-const CUSTOM = '직접 입력'
 const FREQ_KEY = 'seat_map_branch_freq'
 const TOP_N = 3
 
@@ -245,8 +272,8 @@ function TheaterSelector({
 
   const topBranches = config.brand ? getTopBranches(config.brand, allBranches) : []
 
-  const isBranchCustom = config.branch === CUSTOM || (!!config.branch && !allBranches.includes(config.branch))
-  const isScreenCustom = config.screen === CUSTOM || (!!config.screen && !(theaterData?.screens ?? []).includes(config.screen))
+  const isBranchCustom = config.branch === CUSTOM || (!!config.branch && !isKnownBranch(config.brand, config.branch))
+  const isScreenCustom = config.screen === CUSTOM || (!!config.screen && !isKnownScreen(config.brand, config.screen))
 
   function handleBrandChange(brand: string) {
     update({ brand, branch: '', screen: '' })

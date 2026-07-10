@@ -7,6 +7,7 @@ type MobileScreen = "seat" | "layout" | "zone" | "exit";
 
 interface Props {
   config: SeatMapConfig;
+  isAdmin: boolean;
   mobileScreen: MobileScreen;
   setMobileScreen: Dispatch<SetStateAction<MobileScreen>>;
   mobileZoneMode: "aisle" | "excluded";
@@ -25,6 +26,7 @@ interface Props {
 // 모바일 전체화면 편집 오버레이 (시안 3: 헤더 + 카드 + 바텀시트)
 export function MobileEditOverlay({
   config,
+  isAdmin,
   mobileScreen,
   setMobileScreen,
   mobileZoneMode,
@@ -101,7 +103,7 @@ export function MobileEditOverlay({
             완료
           </button>
         )}
-        {mobileScreen === "layout" && (
+        {mobileScreen === "layout" && isAdmin && (
           <button
             type="button"
             onClick={enterGridResize}
@@ -136,35 +138,37 @@ export function MobileEditOverlay({
             <p className="text-xs text-gray-400 mb-3">
               좌석을 탭해 시선일치행·명당·실관람을 설정하세요.
             </p>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  enterGridResize();
-                  setMobileScreen("layout");
-                }}
-                className="px-2 py-2.5 text-xs rounded-xl border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-medium"
-              >
-                레이아웃 편집
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  enterEditMode("layout");
-                  setMobileScreen("zone");
-                }}
-                className="px-2 py-2.5 text-xs rounded-xl border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-medium"
-              >
-                복도·제외구역
-              </button>
-              <button
-                type="button"
-                onClick={() => setMobileScreen("exit")}
-                className="px-2 py-2.5 text-xs rounded-xl border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-medium"
-              >
-                출입구
-              </button>
-            </div>
+            {isAdmin && (
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    enterGridResize();
+                    setMobileScreen("layout");
+                  }}
+                  className="px-2 py-2.5 text-xs rounded-xl border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-medium"
+                >
+                  레이아웃 편집
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    enterEditMode("layout");
+                    setMobileScreen("zone");
+                  }}
+                  className="px-2 py-2.5 text-xs rounded-xl border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-medium"
+                >
+                  복도·제외구역
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMobileScreen("exit")}
+                  className="px-2 py-2.5 text-xs rounded-xl border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-medium"
+                >
+                  출입구
+                </button>
+              </div>
+            )}
           </>
         )}
         {mobileScreen === "layout" && (

@@ -12,6 +12,7 @@ import { useCompact } from "./hooks/useCompact";
 import { useFitScale } from "./hooks/useFitScale";
 import { useSeatMapConfig } from "./hooks/useSeatMapConfig";
 import { useSavedConfigs } from "./hooks/useSavedConfigs";
+import { useTheaterLayoutPreset } from "./hooks/useTheaterLayoutPreset";
 import { useImageDownload } from "./hooks/useImageDownload";
 
 function App() {
@@ -57,6 +58,13 @@ function App() {
     exportJson,
     importJson,
   } = useSavedConfigs({ config, setConfig, setEditMode });
+  const {
+    isAdmin,
+    presetExists,
+    presetLoading,
+    loadPreset,
+    publishPreset,
+  } = useTheaterLayoutPreset({ user, config, setConfig });
   const [mobileEditOpen, setMobileEditOpen] = useState(false);
   // 모바일 오버레이 화면 (시안 3): 좌석 설정 / 레이아웃 / 복도·제외 / 출입구
   const [mobileScreen, setMobileScreen] = useState<
@@ -129,6 +137,7 @@ function App() {
     onToggleAisle: toggleRowAisle,
     onToggleColAisle: toggleColAisle,
     onToggleExit: toggleExit,
+    isAdmin,
   };
 
   const brandTheme = themeFor(config.brand);
@@ -242,6 +251,11 @@ function App() {
           onEnterGridResize={enterGridResize}
           onCancelEditMode={cancelEditMode}
           onCompleteEditMode={completeEditMode}
+          isAdmin={isAdmin}
+          presetExists={presetExists}
+          presetLoading={presetLoading}
+          onLoadPreset={loadPreset}
+          onPublishPreset={publishPreset}
         />
 
         {/* 이미지 다운로드 — 패널 하단 (모바일에선 페이지 맨 아래) */}
@@ -292,6 +306,7 @@ function App() {
         {compact && mobileEditOpen && (
           <MobileEditOverlay
             config={config}
+            isAdmin={isAdmin}
             mobileScreen={mobileScreen}
             setMobileScreen={setMobileScreen}
             mobileZoneMode={mobileZoneMode}

@@ -28,6 +28,7 @@ interface Props {
   onToggleExcludedSeat: (row: number, col: number) => void
   onExcludeSeats: (seats: { row: number; col: number }[]) => void
   onToggleExit: (row: number, col: number, side: ExitSide) => void
+  isAdmin: boolean
   viewOnly?: boolean
   seatMenuAsSheet?: boolean  // 모바일: 좌석 메뉴를 바텀시트로 (시안 5d)
   exitTapMode?: boolean      // 모바일: 가장자리 탭으로 출입구 토글 (시안 5c)
@@ -46,6 +47,7 @@ export default function SeatMapPreview({
   onAddPrimeRange, onRemovePrimeRange,
   onAddWatchedRange, onToggleWatchedSeat, onSetWatchedMemo, onToggleSightRow,
   onToggleAisle, onToggleColAisle, onToggleExit,
+  isAdmin,
   viewOnly = false,
   seatMenuAsSheet = false,
   exitTapMode = false,
@@ -450,6 +452,7 @@ export default function SeatMapPreview({
           onToggleSightRow={onToggleSightRow}
           onToggleExcludedSeat={onToggleExcludedSeat}
           onToggleExit={onToggleExit}
+          isAdmin={isAdmin}
           onHoverHint={setHighlightHint}
           onClose={() => { setPopup(null); setHighlightHint(null) }}
           sheet={seatMenuAsSheet}

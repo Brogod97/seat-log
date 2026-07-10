@@ -54,3 +54,13 @@ export const THEATERS: Record<string, TheaterData> = {
 }
 
 export const BRAND_LIST = Object.keys(THEATERS)
+
+export const CUSTOM = '직접 입력'
+
+export function isKnownBranch(brand: string, branch: string): boolean {
+  return !!brand && !!branch && (THEATERS[brand]?.branches ?? []).includes(branch)
+}
+
+export function isKnownScreen(brand: string, screen: string): boolean {
+  return !!brand && !!screen && (THEATERS[brand]?.screens ?? []).includes(screen)
+}
