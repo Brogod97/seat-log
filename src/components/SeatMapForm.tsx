@@ -118,12 +118,6 @@ export default function SeatMapForm({
             <div className="flex items-center justify-between mb-2">
               <label className="text-sm font-medium text-gray-700 dark:text-gray-200">레이아웃</label>
               <div className="flex gap-1 items-center">
-                {editMode === null && isKnownSelection && (
-                  <button type="button" onClick={onPublishPreset}
-                    className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                    관리자: 게시
-                  </button>
-                )}
                 {editMode === null && (
                   <button type="button" onClick={onEnterGridResize}
                     className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
@@ -160,6 +154,30 @@ export default function SeatMapForm({
                 </span>
               )}
             </div>
+
+            {/* 공용 레이아웃 게시 — 이 물리 구조를 모든 사용자에게 공유 */}
+            {editMode === null && isKnownSelection && (
+              <div className="mt-3 pt-3 border-t border-dashed border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="text-xs font-medium text-gray-600 dark:text-gray-300">공용 레이아웃</span>
+                  {presetExists && (
+                    <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">
+                      게시됨
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">
+                  현재 좌석 구조(행·열·복도·제외·출입구)를 이 상영관을 여는 모든 사용자에게 {presetExists ? '공유 중이에요. 현재 구조로 갱신합니다.' : '기본 배치로 공유해요.'}
+                </p>
+                <button
+                  type="button"
+                  onClick={onPublishPreset}
+                  className="w-full text-xs px-3 py-2 rounded-lg btn-accent font-medium"
+                >
+                  {presetExists ? '이 구조로 업데이트' : '공용 레이아웃으로 게시'}
+                </button>
+              </div>
+            )}
           </div>
         </>
       )}
