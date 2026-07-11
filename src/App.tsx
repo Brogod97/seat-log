@@ -7,6 +7,7 @@ import { AccountCard } from "./components/sidebar/AccountCard";
 import { SavedList } from "./components/sidebar/SavedList";
 import { PreviewArea } from "./components/preview/PreviewArea";
 import { MobileEditOverlay } from "./components/mobile/MobileEditOverlay";
+import { PreviewViewer } from "./components/mobile/PreviewViewer";
 import { useTheme } from "./hooks/useTheme";
 import { useCompact } from "./hooks/useCompact";
 import { useFitScale } from "./hooks/useFitScale";
@@ -84,6 +85,7 @@ function App() {
     publishPreset,
   } = useTheaterLayoutPreset({ user, config, setConfig, adminMode });
   const [mobileEditOpen, setMobileEditOpen] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false); // 모바일 확대 뷰어
   // 모바일 오버레이 화면 (시안 3): 좌석 설정 / 레이아웃 / 복도·제외 / 출입구
   const [mobileScreen, setMobileScreen] = useState<
     "seat" | "layout" | "zone" | "exit"
@@ -370,7 +372,16 @@ function App() {
           fitHeight={fitHeight}
           compact={compact}
           previewProps={previewProps}
+          onOpenViewer={() => setViewerOpen(true)}
         />
+
+        {/* 모바일 좌석표 확대 뷰어 (회전 + 핀치 줌/팬) */}
+        {compact && viewerOpen && (
+          <PreviewViewer
+            onClose={() => setViewerOpen(false)}
+            previewProps={previewProps}
+          />
+        )}
 
         {/* 모바일: 프리뷰 바로 아래 편집 진입 버튼 (시안 2a) */}
         {compact && (
