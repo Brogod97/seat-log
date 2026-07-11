@@ -39,6 +39,9 @@ export function useTheaterLayoutPreset({ user, config, setConfig, adminMode }: P
   useEffect(() => {
     configRef.current = config;
   }, [config]);
+  // 직전에 적용한 선택 키 — 마운트 시 복원된 선택으로 초기화해, 최초 진입/카탈로그 로드 때는
+  // 선택이 "바뀐" 게 아니므로 자동 적용(및 초기화 confirm)을 건너뛴다
+  const prevSelKeyRef = useRef(configKey(config));
 
   // 계정이 관리자인지(raw) vs 실제 관리자 권한 발동 여부(effective = 계정관리자 && 모드ON)
   const accountIsAdmin = checkIsAdmin(user);
@@ -113,8 +116,11 @@ export function useTheaterLayoutPreset({ user, config, setConfig, adminMode }: P
   // 선택(브랜드/지점/상영관)이 바뀌면 카탈로그에서 동기적으로 조회해 적용(있으면 프리셋, 없으면 빈 레이아웃)
   useEffect(() => {
     if (catalogLoading || !isKnownSelection) return;
-    const preset = catalog[configKey(config)] ?? null;
-    applyPhysicalLayout(preset);
+    const key = configKey(config);
+    // 선택 키가 실제로 바뀐 경우에만 적용 — 복원/카탈로그 로드 시엔 초기화 confirm이 뜨지 않게 함
+    if (prevSelKeyRef.current === key) return;
+    prevSelKeyRef.current = key;
+    applyPhysicalLayout(catalog[key] ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.brand, config.branch, config.screen, catalogLoading]);
 
