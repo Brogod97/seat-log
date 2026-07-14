@@ -338,6 +338,8 @@ export default function SeatMapPreview({
                     const { bg, ring, highlight, excluded } = getSeatAppearance(row, col)
                     const exitSides = config.exits.filter((s) => s.row === row && s.col === col).map((s) => s.side)
                     const inEditMode = editMode !== null
+                    // 제외석은 편집 중엔 ×로 보여 되돌릴 수 있게, 일반 보기·최종 이미지에선 빈 칸(투명)
+                    const showAsBlank = excluded && !inEditMode
 
                     return (
                       <>
@@ -345,20 +347,25 @@ export default function SeatMapPreview({
                           key={`seat-${ri}-${ci}`}
                           style={{ width: SEAT, height: SEAT, flexShrink: 0, position: 'relative' }}
                           className={[
-                            bg, 'rounded flex items-center justify-center transition-colors cursor-pointer',
+                            showAsBlank ? 'bg-transparent' : bg,
+                            'rounded flex items-center justify-center transition-colors',
+                            showAsBlank ? 'cursor-default' : 'cursor-pointer',
                             excluded ? 'text-gray-300' : 'text-gray-700',
-                            inEditMode ? 'hover:brightness-90' : '',
-                            highlight ? 'ring-2 ring-offset-1 ring-gray-500 z-10'
-                              : ring ? `ring-2 ring-offset-0 ${ring}` : '',
+                            !showAsBlank && inEditMode ? 'hover:brightness-90' : '',
+                            showAsBlank ? ''
+                              : highlight ? 'ring-2 ring-offset-1 ring-gray-500 z-10'
+                                : ring ? `ring-2 ring-offset-0 ${ring}` : '',
                           ].filter(Boolean).join(' ')}
                           onMouseDown={() => { if (isRangeMode) handleRangeMouseDown({ row, col }) }}
                           onMouseEnter={() => { setHoverPos({ row, col }); if (isRangeMode) handleRangeMouseEnter({ row, col }) }}
                           onMouseUp={() => { if (isRangeMode) handleRangeMouseUp({ row, col }) }}
-                          onClick={(e) => { if (!isRangeMode) handleSeatClick(row, col, e) }}
+                          onClick={(e) => { if (!isRangeMode && !showAsBlank) handleSeatClick(row, col, e) }}
                         >
-                          {excluded
-                            ? <span style={{ fontSize: 10, lineHeight: 1 }} className="text-gray-300">×</span>
-                            : <span style={{ fontSize: 9, lineHeight: 1 }}>{indexToLabel(ri)}{col}</span>
+                          {showAsBlank
+                            ? null
+                            : excluded
+                              ? <span style={{ fontSize: 10, lineHeight: 1 }} className="text-gray-300">×</span>
+                              : <span style={{ fontSize: 9, lineHeight: 1 }}>{indexToLabel(ri)}{col}</span>
                           }
                           {exitSides.map((side) => (
                             <div key={side} style={exitLineStyle(side)} />
