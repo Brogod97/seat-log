@@ -58,7 +58,8 @@ export function pointInOrOnPolygon(row: number, col: number, vertices: SeatPos[]
 
 // 출입구 선: 좌석의 바깥 변에 문 위치를 표시
 export function exitLineStyle(side: ExitSide): CSSProperties {
-  const C = '#4b5563', T = 4, OUT = -5
+  // 출입구는 핵심 정보가 아니므로 강세를 낮춤 (연한 회색·얇게)
+  const C = '#9ca3af', T = 3, OUT = -5
   const base: CSSProperties = { position: 'absolute', background: C, borderRadius: 2, zIndex: 5 }
   if (side === 'left') return { ...base, left: OUT, top: 2, bottom: 2, width: T }
   if (side === 'right') return { ...base, right: OUT, top: 2, bottom: 2, width: T }

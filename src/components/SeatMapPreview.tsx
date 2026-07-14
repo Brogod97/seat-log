@@ -195,7 +195,7 @@ export default function SeatMapPreview({
         ))}
         {config.exits.length > 0 && (
           <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-1.5 rounded-sm bg-gray-500" />출입구
+            <span className="inline-block w-3 h-1.5 rounded-sm bg-gray-400" />출입구
           </span>
         )}
       </div>
