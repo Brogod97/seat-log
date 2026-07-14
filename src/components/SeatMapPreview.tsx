@@ -61,7 +61,7 @@ export default function SeatMapPreview({
   const editMode = viewOnly ? null : editModeProp
   const { rows, cols, rowAisles, colAisles } = config
   const SEAT = 32
-  const AISLE = 12
+  const AISLE = 20  // 복도 폭 (기존 12 → 넓혀 통로가 잘 구분되게)
 
   const rowAisleSet = new Set(rowAisles)
   const colAisleSet = new Set(colAisles)
