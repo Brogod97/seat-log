@@ -1,4 +1,5 @@
 import type { SeatMapConfig } from "../../types";
+import { naturalCompare } from "../../utils/sort";
 
 interface Props {
   saves: Record<string, SeatMapConfig>;
@@ -8,7 +9,8 @@ interface Props {
 
 // 저장된 좌석표 목록 (불러오기 / 삭제)
 export function SavedList({ saves, onLoad, onDelete }: Props) {
-  const keys = Object.keys(saves);
+  // 브랜드·지점·상영관 순으로 자연 정렬 (10관이 1관보다 앞서지 않게)
+  const keys = Object.keys(saves).sort(naturalCompare);
   if (keys.length === 0) return null;
   return (
     <div className="mb-2">

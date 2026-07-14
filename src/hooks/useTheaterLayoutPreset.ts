@@ -11,6 +11,7 @@ import {
 import { db } from "../firebase";
 import { isAdmin as checkIsAdmin } from "../utils/admin";
 import { isKnownBranch, isKnownScreen, CUSTOM } from "../data/theaters";
+import { naturalCompare } from "../utils/sort";
 import { configKey, DEFAULT_CONFIG } from "../utils/storage";
 import type { SeatMapConfig, TheaterLayoutPreset } from "../types";
 
@@ -90,6 +91,13 @@ export function useTheaterLayoutPreset({ user, config, setConfig, adminMode }: P
         brandEntry.branches.push(preset.branch);
       const screens = (brandEntry.screensByBranch[preset.branch] ??= []);
       if (!screens.includes(preset.screen)) screens.push(preset.screen);
+    }
+    // 삽입 순서(사전식) 대신 자연 정렬 — 상영관이 1관~10관 순으로 보이게
+    for (const brandEntry of Object.values(result)) {
+      brandEntry.branches.sort(naturalCompare);
+      for (const screens of Object.values(brandEntry.screensByBranch)) {
+        screens.sort(naturalCompare);
+      }
     }
     return result;
   }, [catalog]);
