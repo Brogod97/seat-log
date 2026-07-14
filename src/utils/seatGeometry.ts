@@ -17,45 +17,6 @@ export function inRange(row: number, col: number, r: Range) {
   return row >= r.rowStart && row <= r.rowEnd && col >= r.colStart && col <= r.colEnd
 }
 
-// 폴리곤 내부 판정 (ray casting)
-function pointInPolygon(row: number, col: number, vertices: SeatPos[]): boolean {
-  const n = vertices.length
-  if (n < 3) return false
-  let inside = false
-  for (let i = 0, j = n - 1; i < n; j = i++) {
-    const xi = vertices[i].col, yi = vertices[i].row
-    const xj = vertices[j].col, yj = vertices[j].row
-    if (((yi > row) !== (yj > row)) && col < ((xj - xi) * (row - yi)) / (yj - yi) + xi) {
-      inside = !inside
-    }
-  }
-  return inside
-}
-
-// 점이 선분에 가까운지 판정 (threshold 단위: grid 좌표)
-function pointNearSegment(
-  px: number, py: number,
-  ax: number, ay: number,
-  bx: number, by: number,
-  threshold = 0.6
-): boolean {
-  const dx = bx - ax, dy = by - ay
-  const lenSq = dx * dx + dy * dy
-  if (lenSq === 0) return Math.hypot(px - ax, py - ay) < threshold
-  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq))
-  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy)) < threshold
-}
-
-// 내부 또는 경계선에 걸친 좌석 판정
-export function pointInOrOnPolygon(row: number, col: number, vertices: SeatPos[]): boolean {
-  if (pointInPolygon(row, col, vertices)) return true
-  const n = vertices.length
-  for (let i = 0, j = n - 1; i < n; j = i++) {
-    if (pointNearSegment(col, row, vertices[i].col, vertices[i].row, vertices[j].col, vertices[j].row)) return true
-  }
-  return false
-}
-
 // 출입구 선: 좌석의 바깥 변에 문 위치를 표시
 export function exitLineStyle(side: ExitSide): CSSProperties {
   // 출입구는 핵심 정보가 아니므로 강세를 낮춤 (연한 회색·얇게)

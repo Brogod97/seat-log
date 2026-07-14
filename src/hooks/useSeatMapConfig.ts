@@ -176,12 +176,17 @@ export function useSeatMapConfig() {
     });
   }
 
-  function excludeSeats(seats: { row: number; col: number }[]) {
+  // 제외 상태를 특정 값으로 설정 (드래그 칠하기/지우기용 — 토글과 달리 지나가도 뒤집히지 않음)
+  function setExcludedSeat(row: number, col: number, excluded: boolean) {
     setConfig((c) => {
-      const toAdd = seats.filter(
-        (s) => !c.excludedSeats.some((e) => e.row === s.row && e.col === s.col),
-      );
-      return { ...c, excludedSeats: [...c.excludedSeats, ...toAdd] };
+      const exists = c.excludedSeats.some((s) => s.row === row && s.col === col);
+      if (excluded === exists) return c;
+      return {
+        ...c,
+        excludedSeats: excluded
+          ? [...c.excludedSeats, { row, col }]
+          : c.excludedSeats.filter((s) => !(s.row === row && s.col === col)),
+      };
     });
   }
 
@@ -226,7 +231,7 @@ export function useSeatMapConfig() {
     toggleSightRow,
     toggleRowAisle,
     toggleExcludedSeat,
-    excludeSeats,
+    setExcludedSeat,
     toggleColAisle,
   };
 }

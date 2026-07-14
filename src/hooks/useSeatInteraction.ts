@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import type { SeatMapConfig, Range, ExitSide, EditMode } from '../types'
 import {
-  normalizeRange, inRange, pointInOrOnPolygon, type SeatPos,
+  normalizeRange, inRange, type SeatPos,
 } from '../utils/seatGeometry'
 import { LAYER_BG, LAYER_RING, getAppliedLayers, MODE_STATUS } from '../utils/seatStyles'
 import type { PopupState, HighlightHint } from '../components/preview/previewTypes'
@@ -20,16 +20,16 @@ interface Params {
   onZoneModeChange?: (m: 'aisle' | 'excluded') => void
   onAddPrimeRange: (range: Range) => void
   onAddWatchedRange: (range: Range) => void
-  onExcludeSeats: (seats: { row: number; col: number }[]) => void
+  onSetExcludedSeat: (row: number, col: number, excluded: boolean) => void
   onToggleExit: (row: number, col: number, side: ExitSide) => void
   onCompleteEditMode: () => void
 }
 
-// 좌석표 상호작용: 드래그·클릭·폴리곤 꼭짓점·팝업 상태 + 핸들러 + 좌석 외형 계산
+// 좌석표 상호작용: 범위 드래그·제외 칠하기·클릭·팝업 상태 + 핸들러 + 좌석 외형 계산
 export function useSeatInteraction({
   config, editMode, layoutPhase, modeStartPos, rows, cols, centerCols,
   viewOnly, exitTapMode, zoneModeProp, onZoneModeChange,
-  onAddPrimeRange, onAddWatchedRange, onExcludeSeats, onToggleExit, onCompleteEditMode,
+  onAddPrimeRange, onAddWatchedRange, onSetExcludedSeat, onToggleExit, onCompleteEditMode,
 }: Params) {
   const [firstClick, setFirstClick] = useState<SeatPos | null>(null)
   const [dragStart, setDragStart] = useState<SeatPos | null>(null)
@@ -40,13 +40,13 @@ export function useSeatInteraction({
   const [popup, setPopup] = useState<PopupState | null>(null)
   const [highlightHint, setHighlightHint] = useState<HighlightHint>(null)
 
-  // 폴리곤 제외 모드
-  const [polyVertices, setPolyVertices] = useState<SeatPos[]>([])
-  const prevEditModeRef = useRef<EditMode>(null)
-
   const popupRef = useRef<HTMLDivElement>(null)
   const dragHandledRef = useRef(false)
   const suppressNextClickRef = useRef(false)
+
+  // 제외 칠하기(드래그) 상태: 시작 칸의 목표 상태(제외/해제)를 드래그 내내 유지
+  const paintingRef = useRef(false)
+  const paintTargetRef = useRef(false)
 
   // 레이아웃 2단계 안의 구역 모드: 복도 / 제외구역 (시안 4b/5b)
   // 모바일에선 부모(바텀시트)가 제어(zoneModeProp), 그 외엔 내부 상태
@@ -56,30 +56,17 @@ export function useSeatInteraction({
     if (onZoneModeChange) onZoneModeChange(m)
     else setZoneModeInternal(m)
   }
-  // 모드가 어느 경로로 바뀌든(내부 토글·바텀시트) 미완성 꼭짓점 정리
-  useEffect(() => {
-    setPolyVertices([])
-  }, [zoneMode])
 
-  // 폴리곤 편집 모드(레이아웃 2단계)를 벗어나면 미완성 꼭짓점 정리 + 구역 모드 초기화
-  const wasPolyModeRef = useRef(false)
+  // 레이아웃 2단계에 진입하면 구역 모드를 복도로 초기화
+  const wasLayoutEditRef = useRef(false)
   useEffect(() => {
-    const isPolyModeNow = editMode === 'layout' && layoutPhase === 'edit'
-    if (wasPolyModeRef.current && !isPolyModeNow) {
-      setPolyVertices([])
-    }
-    if (!wasPolyModeRef.current && isPolyModeNow) {
+    const isLayoutEditNow = editMode === 'layout' && layoutPhase === 'edit'
+    if (!wasLayoutEditRef.current && isLayoutEditNow) {
       if (onZoneModeChange) onZoneModeChange('aisle')
       else setZoneModeInternal('aisle')
     }
-    wasPolyModeRef.current = isPolyModeNow
-    prevEditModeRef.current = editMode
+    wasLayoutEditRef.current = isLayoutEditNow
   }, [editMode, layoutPhase])
-
-  // 폴리곤 미리보기: 현재 꼭짓점 + hover 위치로 계산
-  const polyPreviewVertices = hoverPos && polyVertices.length > 0
-    ? [...polyVertices, hoverPos]
-    : polyVertices
 
   useEffect(() => {
     if (!popup) return
@@ -93,7 +80,7 @@ export function useSeatInteraction({
   useEffect(() => {
     if (!editMode) {
       setFirstClick(null); setDragStart(null); setIsDragging(false)
-      setPolyVertices([])
+      paintingRef.current = false
       return
     }
     if ((editMode === 'prime' || editMode === 'watched') && modeStartPos) {
@@ -121,19 +108,6 @@ export function useSeatInteraction({
   function getSeatAppearance(row: number, col: number): { bg: string; ring: string | null; highlight: boolean; excluded: boolean } {
     const highlight = isHighlighted(row, col)
     const isExcluded = config.excludedSeats.some((s) => s.row === row && s.col === col)
-
-    // excluded 폴리곤 미리보기 (excluded 모드 또는 layout 2단계)
-    const isPolyMode = editMode === 'layout' && layoutPhase === 'edit' && zoneMode === 'excluded'
-    if (isPolyMode) {
-      const isFirstVertex = polyVertices[0]?.row === row && polyVertices[0]?.col === col
-      const isVertex = polyVertices.some((v) => v.row === row && v.col === col)
-      if (isFirstVertex && polyVertices.length >= 3)
-        return { bg: 'bg-red-400', ring: 'ring-2 ring-red-600', highlight, excluded: false }
-      if (isVertex) return { bg: 'bg-gray-500', ring: null, highlight, excluded: false }
-      if (polyPreviewVertices.length >= 3 && pointInOrOnPolygon(row, col, polyPreviewVertices)) {
-        return { bg: 'bg-gray-300', ring: null, highlight, excluded: false }
-      }
-    }
 
     // excluded seats always shown as excluded
     if (isExcluded) return { bg: 'bg-gray-50', ring: 'ring-1 ring-gray-200', highlight, excluded: true }
@@ -188,6 +162,21 @@ export function useSeatInteraction({
     }
   }
 
+  // 제외 칠하기: 시작 칸의 반대 상태를 목표로 잡고, 드래그로 지나간 칸에 같은 상태 적용
+  function handleExcludeDown(pos: SeatPos) {
+    const isExcluded = config.excludedSeats.some((s) => s.row === pos.row && s.col === pos.col)
+    paintingRef.current = true
+    paintTargetRef.current = !isExcluded
+    onSetExcludedSeat(pos.row, pos.col, paintTargetRef.current)
+  }
+  function handleExcludeEnter(pos: SeatPos) {
+    if (!paintingRef.current) return
+    onSetExcludedSeat(pos.row, pos.col, paintTargetRef.current)
+  }
+  function handleExcludeUp() {
+    paintingRef.current = false
+  }
+
   function handleSeatClick(row: number, col: number, e: React.MouseEvent) {
     if (viewOnly) return
     if (suppressNextClickRef.current) { suppressNextClickRef.current = false; return }
@@ -204,37 +193,21 @@ export function useSeatInteraction({
       else onToggleExit(row, col, sides[0])
       return
     }
-    // layout 2단계: 제외구역 모드에서만 좌석 클릭 = 폴리곤 꼭짓점
-    if (editMode === 'layout' && layoutPhase === 'edit') {
-      if (zoneMode !== 'excluded') return
-      const first = polyVertices[0]
-      if (polyVertices.length >= 3 && first && first.row === row && first.col === col) {
-        // 폴리곤 확정
-        const seats: { row: number; col: number }[] = []
-        for (let r = 1; r <= rows; r++) {
-          for (let c = 1; c <= cols; c++) {
-            if (pointInOrOnPolygon(r, c, polyVertices)) seats.push({ row: r, col: c })
-          }
-        }
-        if (seats.length > 0) onExcludeSeats(seats)
-        setPolyVertices([])
-      } else {
-        setPolyVertices((v) => [...v, { row, col }])
-      }
-      return
-    }
+    // layout 2단계: 제외구역은 칠하기(down/enter/up)로, 복도는 갭 클릭으로 처리 → 좌석 클릭은 무시
+    if (editMode === 'layout' && layoutPhase === 'edit') return
     // 일반 모드: 팝업 표시
     if (!isRangeMode) {
       setPopup({ x: e.clientX, y: e.clientY, row, col })
     }
   }
 
+  const isExcludePaintMode = editMode === 'layout' && layoutPhase === 'edit' && zoneMode === 'excluded'
   const modeInfo = editMode === 'layout'
     ? layoutPhase === 'size'
       ? '크기를 선택하세요'
-      : polyVertices.length === 0
-        ? '갭 클릭 = 복도  |  좌석 클릭 = 제외 영역 꼭짓점 시작'
-        : `꼭짓점 ${polyVertices.length}개 — 계속 클릭하거나 첫 꼭짓점으로 확정`
+      : zoneMode === 'excluded'
+        ? '좌석 탭 = 제외/해제  |  드래그로 여러 칸'
+        : '행·열 사이 갭을 클릭해 복도 지정'
     : editMode
       ? MODE_STATUS[editMode](!!firstClick)
       : null
@@ -249,10 +222,10 @@ export function useSeatInteraction({
     dragStart, setDragStart,
     isDragging, setIsDragging,
     dragHandledRef,
-    polyVertices, polyPreviewVertices,
     // 파생
     zoneMode, switchZoneMode,
     isRangeMode,
+    isExcludePaintMode,
     modeInfo,
     // 계산·핸들러
     getSeatAppearance,
@@ -261,5 +234,8 @@ export function useSeatInteraction({
     handleRangeMouseUp,
     commitRange,
     handleSeatClick,
+    handleExcludeDown,
+    handleExcludeEnter,
+    handleExcludeUp,
   }
 }

@@ -222,7 +222,7 @@ export function MobileEditOverlay({
             <p className="text-xs text-gray-400 mb-3">
               {mobileZoneMode === "aisle"
                 ? "행·열 사이 틈을 탭해 복도를 지정해요."
-                : "좌석을 탭해 꼭짓점을 잇고, 첫 꼭짓점을 다시 탭하면 제외구역이 확정돼요."}
+                : "좌석을 탭하면 제외/해제가 토글돼요. (여러 칸 드래그 칠하기는 PC에서)"}
             </p>
             <div className="flex gap-2 mb-2">
               <button

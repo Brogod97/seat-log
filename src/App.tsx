@@ -42,7 +42,7 @@ function App() {
     toggleSightRow,
     toggleRowAisle,
     toggleExcludedSeat,
-    excludeSeats,
+    setExcludedSeat,
     toggleColAisle,
   } = useSeatMapConfig();
   const { theme, setTheme } = useTheme();
@@ -148,7 +148,7 @@ function App() {
     onCompleteEditMode: completeEditMode,
     onSetGridSize: setGridSize,
     onToggleExcludedSeat: toggleExcludedSeat,
-    onExcludeSeats: excludeSeats,
+    onSetExcludedSeat: setExcludedSeat,
     onAddPrimeRange: addPrimeRange,
     onRemovePrimeRange: removePrimeRange,
     onAddWatchedRange: addWatchedRange,

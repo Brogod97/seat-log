@@ -26,7 +26,7 @@ interface Props {
   onToggleAisle: (row: number) => void
   onToggleColAisle: (col: number) => void
   onToggleExcludedSeat: (row: number, col: number) => void
-  onExcludeSeats: (seats: { row: number; col: number }[]) => void
+  onSetExcludedSeat: (row: number, col: number, excluded: boolean) => void
   onToggleExit: (row: number, col: number, side: ExitSide) => void
   isAdmin: boolean
   viewOnly?: boolean
@@ -43,7 +43,7 @@ export default function SeatMapPreview({
   config, editMode: editModeProp, layoutPhase, modeStartPos,
   onEnterModeFrom,
   onCancelEditMode, onCompleteEditMode, onSetGridSize,
-  onToggleExcludedSeat, onExcludeSeats,
+  onToggleExcludedSeat, onSetExcludedSeat,
   onAddPrimeRange, onRemovePrimeRange,
   onAddWatchedRange, onToggleWatchedSeat, onSetWatchedMemo, onToggleSightRow,
   onToggleAisle, onToggleColAisle, onToggleExit,
@@ -85,16 +85,17 @@ export default function SeatMapPreview({
     dragStart, setDragStart,
     isDragging, setIsDragging,
     dragHandledRef,
-    polyVertices, polyPreviewVertices,
     zoneMode, switchZoneMode,
     isRangeMode,
+    isExcludePaintMode,
     modeInfo,
     getSeatAppearance,
     handleRangeMouseDown, handleRangeMouseEnter, handleRangeMouseUp, commitRange, handleSeatClick,
+    handleExcludeDown, handleExcludeEnter, handleExcludeUp,
   } = useSeatInteraction({
     config, editMode, layoutPhase, modeStartPos, rows, cols, centerCols,
     viewOnly, exitTapMode, zoneModeProp, onZoneModeChange,
-    onAddPrimeRange, onAddWatchedRange, onExcludeSeats, onToggleExit, onCompleteEditMode,
+    onAddPrimeRange, onAddWatchedRange, onSetExcludedSeat, onToggleExit, onCompleteEditMode,
   })
 
   const ringClass = editMode ? (MODE_RING[editMode] ?? '') : ''
@@ -161,9 +162,7 @@ export default function SeatMapPreview({
           <span className="text-xs text-gray-400">
             {zoneMode === 'aisle'
               ? '행·열 사이 틈을 클릭해 복도 지정'
-              : polyVertices.length === 0
-                ? '좌석을 눌러 꼭짓점 시작'
-                : `꼭짓점 ${polyVertices.length}개 — 첫 꼭짓점을 다시 눌러 확정`}
+              : '좌석 탭 = 제외/해제 · 드래그로 여러 칸'}
           </span>
           <button
             type="button"
@@ -218,8 +217,9 @@ export default function SeatMapPreview({
       {!(editMode === 'layout' && layoutPhase === 'size') && <div
         className={`inline-block relative rounded-lg transition-all duration-150 ${editMode ? `ring-2 ring-offset-4 p-3 ${ringClass}` : ''}`}
         onClick={(e) => e.stopPropagation()}
-        onMouseLeave={() => { setHoverPos(null); if (isRangeMode) { setDragStart(null); setIsDragging(false) } }}
+        onMouseLeave={() => { setHoverPos(null); if (isExcludePaintMode) handleExcludeUp(); if (isRangeMode) { setDragStart(null); setIsDragging(false) } }}
         onMouseUp={() => {
+          if (isExcludePaintMode) handleExcludeUp()
           if (dragHandledRef.current) { dragHandledRef.current = false; return }
           if (isRangeMode && isDragging && dragStart && hoverPos) {
             commitRange(normalizeRange(dragStart, hoverPos))
@@ -292,39 +292,6 @@ export default function SeatMapPreview({
               ))}
             </>
           )}
-          {/* 폴리곤 SVG 오버레이 — inner div 기준으로 절대 위치 */}
-          {editMode === 'layout' && layoutPhase === 'edit' && zoneMode === 'excluded' && polyPreviewVertices.length >= 2 && (
-            <svg
-              style={{
-                position: 'absolute', top: 0, left: 0,
-                width: gridPixelWidth, height: gridPixelHeight,
-                pointerEvents: 'none', overflow: 'visible', zIndex: 10,
-              }}
-            >
-              <polygon
-                points={polyPreviewVertices.map((v) => {
-                  const { x, y } = seatPixelCenter(v.row, v.col)
-                  return `${x},${y}`
-                }).join(' ')}
-                fill="rgba(107,114,128,0.15)"
-                stroke="#6b7280"
-                strokeWidth={1.5}
-                strokeDasharray="4 2"
-              />
-              {polyVertices.map((v, i) => {
-                const { x, y } = seatPixelCenter(v.row, v.col)
-                const isFirst = i === 0
-                return (
-                  <circle
-                    key={i} cx={x} cy={y}
-                    r={isFirst ? 6 : 4}
-                    fill={isFirst ? '#ef4444' : '#374151'}
-                    stroke="white" strokeWidth={1.5}
-                  />
-                )
-              })}
-            </svg>
-          )}
           {Array.from({ length: rows }, (_, ri) => {
             const row = ri + 1
             const isAisleRow = rowAisleSet.has(row)
@@ -356,10 +323,10 @@ export default function SeatMapPreview({
                               : highlight ? 'ring-2 ring-offset-1 ring-gray-500 z-10'
                                 : ring ? `ring-2 ring-offset-0 ${ring}` : '',
                           ].filter(Boolean).join(' ')}
-                          onMouseDown={() => { if (isRangeMode) handleRangeMouseDown({ row, col }) }}
-                          onMouseEnter={() => { setHoverPos({ row, col }); if (isRangeMode) handleRangeMouseEnter({ row, col }) }}
-                          onMouseUp={() => { if (isRangeMode) handleRangeMouseUp({ row, col }) }}
-                          onClick={(e) => { if (!isRangeMode && !showAsBlank) handleSeatClick(row, col, e) }}
+                          onMouseDown={() => { if (isExcludePaintMode) handleExcludeDown({ row, col }); else if (isRangeMode) handleRangeMouseDown({ row, col }) }}
+                          onMouseEnter={() => { setHoverPos({ row, col }); if (isExcludePaintMode) handleExcludeEnter({ row, col }); else if (isRangeMode) handleRangeMouseEnter({ row, col }) }}
+                          onMouseUp={() => { if (isExcludePaintMode) handleExcludeUp(); else if (isRangeMode) handleRangeMouseUp({ row, col }) }}
+                          onClick={(e) => { if (!isRangeMode && !isExcludePaintMode && !showAsBlank) handleSeatClick(row, col, e) }}
                         >
                           {showAsBlank
                             ? null
