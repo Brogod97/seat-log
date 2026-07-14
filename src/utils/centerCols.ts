@@ -1,38 +1,43 @@
 /**
- * 복도(colAisles)로 나뉜 열 블럭 중 가운데 블럭의 중앙 열을 반환.
- * 블럭 좌석 수가 짝수면 중앙 2열, 홀수면 1열.
+ * 좌석표의 물리적 중심(복도 폭 포함)에 가장 가까운 열(들)을 중앙열로 반환.
+ *
+ * 각 열의 픽셀 중심을 복도 폭까지 반영해 계산한 뒤, 전체 폭의 중심에 가장 가까운 열을 찾는다.
+ * - 중심이 한 열 위에 오면(홀수 대칭) 1열
+ * - 중심이 두 열 사이(복도/대칭축)에 오면 좌우 2열
+ *
+ * 예) 16열, 4열마다 복도(colAisles=[4,8,12])는 좌우 대칭이라 중심이 8·9열 사이 복도에 걸려 [8, 9] 반환.
+ * (좌석 크기는 렌더와 동일 비율만 맞으면 대칭 계산엔 충분 — 아래 상수는 SeatMapPreview와 동일)
+ *
  * 반환값: 1-based 열 번호 배열
  */
+const SEAT = 32
+const GAP = 2
+const AISLE = 20
+
 export function calcCenterCols(cols: number, colAisles: number[]): number[] {
-  // 블럭 분리: colAisles는 정렬된 1-based 번호
-  const sorted = [...colAisles].sort((a, b) => a - b)
-  const boundaries = [0, ...sorted, cols]
-  const blocks: { start: number; end: number }[] = []
-  for (let i = 0; i < boundaries.length - 1; i++) {
-    blocks.push({ start: boundaries[i] + 1, end: boundaries[i + 1] })
+  if (cols <= 0) return []
+  const aisleSet = new Set(colAisles)
+
+  // 각 열의 중심 x 좌표 (열 상자 폭 SEAT, 열 사이 간격은 복도면 AISLE, 아니면 GAP)
+  const centerX: number[] = []
+  let x = 0
+  for (let c = 1; c <= cols; c++) {
+    centerX.push(x + SEAT / 2)
+    x += SEAT + (aisleSet.has(c) ? AISLE : GAP)
   }
 
-  if (blocks.length === 0) return []
+  const gridWidth = centerX[cols - 1] + SEAT / 2
+  const mid = gridWidth / 2
 
-  // 전체 열의 물리적 중심이 포함된 블럭을 중앙 블럭으로 선택
-  const overallCenter = (cols + 1) / 2
-  const midIdx = (() => {
-    const found = blocks.findIndex((b) => b.start <= overallCenter && b.end >= overallCenter)
-    // 중심이 복도에 걸쳐 있으면 오른쪽 블럭 선택
-    if (found !== -1) return found
-    return blocks.findIndex((b) => b.start > overallCenter) ?? Math.floor((blocks.length - 1) / 2)
-  })()
-  const midBlock = blocks[midIdx]
-  const blockSize = midBlock.end - midBlock.start + 1
+  // 중심에 가장 가까운 거리
+  let minDist = Infinity
+  for (const cx of centerX) minDist = Math.min(minDist, Math.abs(cx - mid))
 
-  if (blockSize % 2 === 1) {
-    // 홀수: 정중앙 1열
-    const center = midBlock.start + Math.floor(blockSize / 2)
-    return [center]
-  } else {
-    // 짝수: 중앙 2열
-    const left = midBlock.start + blockSize / 2 - 1
-    const right = midBlock.start + blockSize / 2
-    return [left, right]
+  // 그 거리와 (부동소수 오차 범위 내) 같은 열들 — 대칭축이 두 열 사이면 2열이 함께 뽑힘
+  const EPS = 0.5
+  const result: number[] = []
+  for (let c = 1; c <= cols; c++) {
+    if (Math.abs(centerX[c - 1] - mid) <= minDist + EPS) result.push(c)
   }
+  return result
 }
