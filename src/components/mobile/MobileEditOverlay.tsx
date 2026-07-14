@@ -1,5 +1,6 @@
 import type { ComponentProps, Dispatch, SetStateAction } from "react";
 import SeatMapPreview from "../SeatMapPreview";
+import { PublishLayoutButton } from "../PublishLayoutButton";
 import { indexToLabel } from "../../utils/rowLabel";
 import type { SeatMapConfig, EditMode } from "../../types";
 
@@ -21,6 +22,9 @@ interface Props {
   enterGridResize: () => void;
   enterEditMode: (mode: EditMode) => void;
   setGridSize: (rows: number, cols: number) => void;
+  presetExists: boolean;
+  canPublish: boolean; // 브랜드·지점·상영관이 모두 채워져 게시 가능한지
+  onPublish: () => Promise<boolean>;
 }
 
 // 모바일 전체화면 편집 오버레이 (시안 3: 헤더 + 카드 + 바텀시트)
@@ -40,6 +44,9 @@ export function MobileEditOverlay({
   enterGridResize,
   enterEditMode,
   setGridSize,
+  presetExists,
+  canPublish,
+  onPublish,
 }: Props) {
   const subtitle = [config.brand, config.branch, config.screen]
     .filter(Boolean)
@@ -168,6 +175,10 @@ export function MobileEditOverlay({
                   출입구
                 </button>
               </div>
+            )}
+            {/* 공용 레이아웃 게시 — 편집을 마친 뒤 이 화면에서 바로 게시 (동선 개선) */}
+            {isAdmin && canPublish && (
+              <PublishLayoutButton presetExists={presetExists} onPublish={onPublish} />
             )}
           </>
         )}

@@ -82,6 +82,7 @@ function App() {
     publicTheaters,
     catalogLoading,
     presetExists,
+    selectionComplete,
     publishPreset,
   } = useTheaterLayoutPreset({ user, config, setConfig, adminMode });
   const [mobileEditOpen, setMobileEditOpen] = useState(false);
@@ -316,6 +317,7 @@ function App() {
           catalogLoading={catalogLoading}
           presetExists={presetExists}
           onPublishPreset={publishPreset}
+          compact={compact}
         />
 
         {/* 이미지 다운로드 — 패널 하단 (모바일에선 페이지 맨 아래) */}
@@ -415,6 +417,9 @@ function App() {
             enterGridResize={enterGridResize}
             enterEditMode={enterEditMode}
             setGridSize={setGridSize}
+            presetExists={presetExists}
+            canPublish={selectionComplete}
+            onPublish={publishPreset}
           />
         )}
       </main>

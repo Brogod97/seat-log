@@ -10,7 +10,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { isAdmin as checkIsAdmin } from "../utils/admin";
-import { isKnownBranch, isKnownScreen } from "../data/theaters";
+import { isKnownBranch, isKnownScreen, CUSTOM } from "../data/theaters";
 import { configKey, DEFAULT_CONFIG } from "../utils/storage";
 import type { SeatMapConfig, TheaterLayoutPreset } from "../types";
 
@@ -49,6 +49,14 @@ export function useTheaterLayoutPreset({ user, config, setConfig, adminMode }: P
   const isKnownSelection =
     isKnownBranch(config.brand, config.branch) &&
     isKnownScreen(config.brand, config.screen);
+  // 게시 가능 여부: 정적 목록에 있는지가 아니라 브랜드·지점·상영관이 모두 채워졌는지로 판단.
+  // (관리자가 직접 입력(CUSTOM)한 지점/상영관도 게시할 수 있어야 함 — 자동 적용은 여전히 isKnownSelection 기준)
+  const selectionComplete =
+    !!config.brand &&
+    !!config.branch &&
+    config.branch !== CUSTOM &&
+    !!config.screen &&
+    config.screen !== CUSTOM;
 
   function fetchCatalog() {
     setCatalogLoading(true);
@@ -124,10 +132,11 @@ export function useTheaterLayoutPreset({ user, config, setConfig, adminMode }: P
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.brand, config.branch, config.screen, catalogLoading]);
 
-  const presetExists = isKnownSelection && !!catalog[configKey(config)];
+  const presetExists = selectionComplete && !!catalog[configKey(config)];
 
-  async function publishPreset() {
-    if (!admin || !isKnownSelection) return;
+  // 성공 시 true, 실패 시 false 반환 — 버튼이 로딩/완료 상태를 표시하는 데 사용
+  async function publishPreset(): Promise<boolean> {
+    if (!admin || !selectionComplete) return false;
     const key = configKey(config);
     const preset: TheaterLayoutPreset = {
       brand: config.brand,
@@ -147,9 +156,11 @@ export function useTheaterLayoutPreset({ user, config, setConfig, adminMode }: P
         updatedBy: user?.uid ?? null,
       });
       setCatalog((c) => ({ ...c, [key]: preset }));
+      return true;
     } catch (e) {
       console.error("지점 레이아웃 게시 실패", e);
       alert("게시에 실패했어요.");
+      return false;
     }
   }
 
@@ -159,6 +170,7 @@ export function useTheaterLayoutPreset({ user, config, setConfig, adminMode }: P
     publicTheaters,
     catalogLoading,
     presetExists,
+    selectionComplete,      // 게시 가능한(브랜드·지점·상영관 모두 채워진) 선택인지
     publishPreset,
     refetchCatalog: fetchCatalog,
   };

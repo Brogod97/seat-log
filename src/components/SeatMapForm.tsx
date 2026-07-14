@@ -4,6 +4,7 @@ import { indexToLabel } from '../utils/rowLabel'
 import { THEATERS, BRAND_LIST, CUSTOM, isKnownBranch, isKnownScreen } from '../data/theaters'
 import { FREQ_KEY } from '../utils/storage'
 import type { PublicTheaterData } from '../hooks/useTheaterLayoutPreset'
+import { PublishLayoutButton } from './PublishLayoutButton'
 
 interface Props {
   config: SeatMapConfig
@@ -17,7 +18,8 @@ interface Props {
   publicTheaters: Record<string, PublicTheaterData>
   catalogLoading: boolean
   presetExists: boolean
-  onPublishPreset: () => void
+  onPublishPreset: () => Promise<boolean>
+  compact: boolean  // 모바일: 레이아웃 편집/게시는 편집 오버레이에서 하므로 사이드바 버튼은 숨김
 }
 
 type BtnColor = 'red' | 'yellow' | 'green' | 'indigo' | 'gray'
@@ -69,7 +71,7 @@ function EditModeButton({
 export default function SeatMapForm({
   config, onChange, editMode,
   onEnterEditMode, onEnterGridResize, onCancelEditMode, onCompleteEditMode,
-  isAdmin, publicTheaters, catalogLoading, presetExists, onPublishPreset,
+  isAdmin, publicTheaters, catalogLoading, presetExists, onPublishPreset, compact,
 }: Props) {
   function update(partial: Partial<SeatMapConfig>) {
     onChange({ ...config, ...partial })
@@ -84,7 +86,12 @@ export default function SeatMapForm({
     onComplete: onCompleteEditMode,
   }
 
-  const isKnownSelection = isKnownBranch(config.brand, config.branch) && isKnownScreen(config.brand, config.screen)
+  // 게시 UI 노출 기준: 정적 목록에 있는지가 아니라 브랜드·지점·상영관이 모두 채워졌는지
+  // (직접 입력(CUSTOM)한 지점/상영관도 관리자는 게시할 수 있어야 함)
+  const selectionComplete =
+    !!config.brand &&
+    !!config.branch && config.branch !== CUSTOM &&
+    !!config.screen && config.screen !== CUSTOM
 
   return (
     <div>
@@ -117,15 +124,18 @@ export default function SeatMapForm({
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
               <label className="text-sm font-medium text-gray-700 dark:text-gray-200">레이아웃</label>
-              <div className="flex gap-1 items-center">
-                {editMode === null && (
-                  <button type="button" onClick={onEnterGridResize}
-                    className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                    초기화
-                  </button>
-                )}
-                <EditModeButton label="편집" color="indigo" mode="layout" active={editMode === 'layout'} {...btnProps} />
-              </div>
+              {/* 모바일에선 상단 [좌석표 편집] 오버레이에서 편집하므로 중복 버튼 숨김 */}
+              {!compact && (
+                <div className="flex gap-1 items-center">
+                  {editMode === null && (
+                    <button type="button" onClick={onEnterGridResize}
+                      className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                      초기화
+                    </button>
+                  )}
+                  <EditModeButton label="편집" color="indigo" mode="layout" active={editMode === 'layout'} {...btnProps} />
+                </div>
+              )}
             </div>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{config.rows}행 × {config.cols}열</p>
             <div className="flex flex-wrap gap-1">
@@ -155,28 +165,9 @@ export default function SeatMapForm({
               )}
             </div>
 
-            {/* 공용 레이아웃 게시 — 이 물리 구조를 모든 사용자에게 공유 */}
-            {editMode === null && isKnownSelection && (
-              <div className="mt-3 pt-3 border-t border-dashed border-gray-200 dark:border-gray-700">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <span className="text-xs font-medium text-gray-600 dark:text-gray-300">공용 레이아웃</span>
-                  {presetExists && (
-                    <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">
-                      게시됨
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">
-                  현재 좌석 구조(행·열·복도·제외·출입구)를 이 상영관을 여는 모든 사용자에게 {presetExists ? '공유 중이에요. 현재 구조로 갱신합니다.' : '기본 배치로 공유해요.'}
-                </p>
-                <button
-                  type="button"
-                  onClick={onPublishPreset}
-                  className="w-full text-xs px-3 py-2 rounded-lg btn-accent font-medium"
-                >
-                  {presetExists ? '이 구조로 업데이트' : '공용 레이아웃으로 게시'}
-                </button>
-              </div>
+            {/* 공용 레이아웃 게시 — 모바일에선 편집 오버레이로 이동(동선 개선) */}
+            {!compact && editMode === null && selectionComplete && (
+              <PublishLayoutButton presetExists={presetExists} onPublish={onPublishPreset} />
             )}
           </div>
         </>
