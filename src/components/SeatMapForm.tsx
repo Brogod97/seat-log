@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { indexToLabel } from '../utils/rowLabel'
 import { THEATERS, BRAND_LIST, CUSTOM, isKnownBranch, isKnownScreen } from '../data/theaters'
 import { FREQ_KEY } from '../utils/storage'
+import { screenCompare } from '../utils/sort'
 import type { PublicTheaterData } from '../hooks/useTheaterLayoutPreset'
 import { PublishLayoutButton } from './PublishLayoutButton'
 
@@ -294,9 +295,10 @@ function TheaterSelector({
   const allBranches = isAdmin
     ? (config.brand ? (THEATERS[config.brand]?.branches ?? []) : [])
     : (config.brand ? (publicTheaters[config.brand]?.branches ?? []) : [])
-  const allScreens = isAdmin
+  const allScreens = (isAdmin
     ? (config.brand ? (THEATERS[config.brand]?.screens ?? []) : [])
     : (config.brand && config.branch ? (publicTheaters[config.brand]?.screensByBranch[config.branch] ?? []) : [])
+  ).slice().sort(screenCompare) // 일반관 숫자순 뒤 특별관(IMAX/4DX 등)
   const branches = isAdmin ? [...allBranches, CUSTOM] : allBranches
   const screens = isAdmin ? [...allScreens, CUSTOM] : allScreens
 
