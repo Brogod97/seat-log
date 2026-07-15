@@ -36,15 +36,22 @@ export function PublishLayoutButton({
             setState('idle')
           }
         }}
-        className={`w-full text-xs px-3 py-2 rounded-lg font-medium flex items-center justify-center gap-1.5 transition-colors disabled:opacity-100 ${state === 'done' ? 'bg-green-500 text-white' : 'btn-accent'}`}
+        // idle=브랜드 base, loading/done=브랜드 hover 색 (초록 제거, 저장 버튼과 톤 통일)
+        style={state === 'idle' ? undefined : { backgroundColor: 'var(--accent-hover)' }}
+        className={`w-full text-xs px-3 py-2 rounded-lg font-medium text-white flex items-center justify-center gap-1.5 transition-colors disabled:opacity-100 ${state === 'idle' ? 'btn-accent' : ''}`}
       >
         {state === 'loading' && (
-          <span className="inline-block w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+          <span className="inline-block w-3.5 h-3.5 border-2 border-white/35 border-t-white rounded-full shrink-0" style={{ animation: 'spin 0.7s linear infinite' }} />
+        )}
+        {state === 'done' && (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="shrink-0">
+            <path d="M4 12.5L9.5 18L20 6.5" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
         )}
         {state === 'loading'
           ? '게시 중…'
           : state === 'done'
-            ? '게시 완료 ✓'
+            ? '게시 완료'
             : presetExists ? '이 구조로 업데이트' : '공용 레이아웃으로 게시'}
       </button>
     </div>
