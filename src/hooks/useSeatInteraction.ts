@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import type { SeatMapConfig, Range, ExitSide, EditMode } from '../types'
+import type { SeatMapConfig, Range, ExitSide, EditMode, ZoneMode } from '../types'
 import {
   normalizeRange, inRange, type SeatPos,
 } from '../utils/seatGeometry'
@@ -16,8 +16,8 @@ interface Params {
   centerCols: number[]
   viewOnly: boolean
   exitTapMode: boolean
-  zoneModeProp?: 'aisle' | 'excluded'
-  onZoneModeChange?: (m: 'aisle' | 'excluded') => void
+  zoneModeProp?: ZoneMode
+  onZoneModeChange?: (m: ZoneMode) => void
   onAddPrimeRange: (range: Range) => void
   onAddWatchedRange: (range: Range) => void
   onSetExcludedSeat: (row: number, col: number, excluded: boolean) => void
@@ -50,9 +50,9 @@ export function useSeatInteraction({
 
   // 레이아웃 2단계 안의 구역 모드: 복도 / 제외구역 (시안 4b/5b)
   // 모바일에선 부모(바텀시트)가 제어(zoneModeProp), 그 외엔 내부 상태
-  const [zoneModeInternal, setZoneModeInternal] = useState<'aisle' | 'excluded'>('aisle')
+  const [zoneModeInternal, setZoneModeInternal] = useState<ZoneMode>('aisle')
   const zoneMode = zoneModeProp ?? zoneModeInternal
-  function switchZoneMode(m: 'aisle' | 'excluded') {
+  function switchZoneMode(m: ZoneMode) {
     if (onZoneModeChange) onZoneModeChange(m)
     else setZoneModeInternal(m)
   }
@@ -180,8 +180,8 @@ export function useSeatInteraction({
   function handleSeatClick(row: number, col: number, e: React.MouseEvent) {
     if (viewOnly) return
     if (suppressNextClickRef.current) { suppressNextClickRef.current = false; return }
-    // 출입구 탭 모드: 가장자리 좌석 탭으로 출입구 토글 (시안 5c)
-    if (exitTapMode) {
+    // 출입구 탭 모드: 가장자리 좌석 탭으로 출입구 토글 (모바일 exitTapMode / 데스크톱 zoneMode='exit')
+    if (exitTapMode || zoneMode === 'exit') {
       const sides: ExitSide[] = []
       if (row === 1) sides.push('top')
       if (row === rows) sides.push('bottom')
@@ -207,7 +207,9 @@ export function useSeatInteraction({
       ? '크기를 선택하세요'
       : zoneMode === 'excluded'
         ? '좌석 탭 = 제외/해제  |  드래그로 여러 칸'
-        : '행·열 사이 갭을 클릭해 복도 지정'
+        : zoneMode === 'exit'
+          ? '가장자리 좌석 탭 = 출입구 표시/해제'
+          : '행·열 사이 갭을 클릭해 복도 지정'
     : editMode
       ? MODE_STATUS[editMode](!!firstClick)
       : null

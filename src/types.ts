@@ -36,6 +36,9 @@ export interface Seat {
 
 export type EditMode = 'layout' | 'prime' | 'watched' | null
 
+// 레이아웃 편집(2단계) 안의 구역 지정 모드: 복도 / 제외구역 / 출입구
+export type ZoneMode = 'aisle' | 'excluded' | 'exit'
+
 // 관리자가 게시하는 지점 공용 좌석 레이아웃 (물리 구조만, 개인 리뷰 데이터 제외)
 export interface TheaterLayoutPreset {
   brand: string

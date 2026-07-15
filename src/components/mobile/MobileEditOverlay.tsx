@@ -2,7 +2,7 @@ import type { ComponentProps, Dispatch, SetStateAction } from "react";
 import SeatMapPreview from "../SeatMapPreview";
 import { PublishLayoutButton } from "../PublishLayoutButton";
 import { indexToLabel } from "../../utils/rowLabel";
-import type { SeatMapConfig, EditMode } from "../../types";
+import type { SeatMapConfig, EditMode, ZoneMode } from "../../types";
 
 type MobileScreen = "seat" | "layout" | "zone" | "exit";
 
@@ -11,8 +11,8 @@ interface Props {
   isAdmin: boolean;
   mobileScreen: MobileScreen;
   setMobileScreen: Dispatch<SetStateAction<MobileScreen>>;
-  mobileZoneMode: "aisle" | "excluded";
-  setMobileZoneMode: Dispatch<SetStateAction<"aisle" | "excluded">>;
+  mobileZoneMode: ZoneMode;
+  setMobileZoneMode: Dispatch<SetStateAction<ZoneMode>>;
   ghostSel: { rows: number; cols: number };
   setGhostSel: Dispatch<SetStateAction<{ rows: number; cols: number }>>;
   previewProps: Omit<ComponentProps<typeof SeatMapPreview>, "viewOnly">;

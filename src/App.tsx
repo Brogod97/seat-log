@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import type { CSSProperties } from "react";
+import type { ZoneMode } from "./types";
 import SeatMapForm from "./components/SeatMapForm";
 import { themeFor } from "./theme";
 import { SunIcon, MoonIcon, ResetIcon, ChevronIcon } from "./components/icons";
@@ -95,9 +96,7 @@ function App() {
   // 모바일 레이아웃 편집: 고스트 그리드 선택값 미러 (바텀시트 표시·적용용)
   const [ghostSel, setGhostSel] = useState({ rows: 10, cols: 20 });
   // 모바일 복도·제외구역 모드 (바텀시트 토글로 제어)
-  const [mobileZoneMode, setMobileZoneMode] = useState<"aisle" | "excluded">(
-    "aisle",
-  );
+  const [mobileZoneMode, setMobileZoneMode] = useState<ZoneMode>("aisle");
   // compact에서 편집 모드가 켜지면 전체화면 오버레이를 띄우고 화면을 동기화
   useEffect(() => {
     if (compact && editMode !== null) {

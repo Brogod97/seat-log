@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom'
-import type { SeatMapConfig, Range, ExitSide, EditMode } from '../types'
+import type { SeatMapConfig, Range, ExitSide, EditMode, ZoneMode } from '../types'
 import { calcCenterCols } from '../utils/centerCols'
 import { indexToLabel } from '../utils/rowLabel'
 import { makeSeatGeometry, normalizeRange, exitLineStyle } from '../utils/seatGeometry'
@@ -34,8 +34,8 @@ interface Props {
   exitTapMode?: boolean      // 모바일: 가장자리 탭으로 출입구 토글 (시안 5c)
   ghostHideActions?: boolean // 모바일: 고스트 그리드 버튼을 바텀시트에서 렌더
   onGhostSelChange?: (rows: number, cols: number) => void
-  zoneMode?: 'aisle' | 'excluded'            // 모바일: 바텀시트에서 제어
-  onZoneModeChange?: (m: 'aisle' | 'excluded') => void
+  zoneMode?: ZoneMode                        // 모바일: 바텀시트에서 제어
+  onZoneModeChange?: (m: ZoneMode) => void
   hideZoneToolbar?: boolean                  // 모바일: 카드 안 토글 숨김 (바텀시트가 대신)
 }
 
@@ -158,11 +158,20 @@ export default function SeatMapPreview({
             >
               제외구역
             </button>
+            <button
+              type="button"
+              onClick={() => switchZoneMode('exit')}
+              className={`text-xs px-3 py-1.5 transition-colors border-l border-gray-200 ${zoneMode === 'exit' ? 'bg-accent-soft text-accent font-medium' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+            >
+              출입구
+            </button>
           </div>
           <span className="text-xs text-gray-400">
             {zoneMode === 'aisle'
               ? '행·열 사이 틈을 클릭해 복도 지정'
-              : '좌석 탭 = 제외/해제 · 드래그로 여러 칸'}
+              : zoneMode === 'excluded'
+                ? '좌석 탭 = 제외/해제 · 드래그로 여러 칸'
+                : '가장자리 좌석 탭 = 출입구 표시/해제'}
           </span>
           <button
             type="button"
