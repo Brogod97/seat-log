@@ -255,42 +255,67 @@ export default function SeatMapPreview({
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
           {rowLabelCol}
         <div style={{ display: 'inline-block', userSelect: 'none', position: 'relative' }}>
-          {/* 복도 파란 띠 (레이아웃 편집 중, 시안 4b) */}
+          {/* 복도 가이드선 (레이아웃 편집 전용) — 빈 통로 + 가이드선 방식.
+              활성 복도=실선(hover 시 진하게), 빈 간격 hover=점선 미리보기. 최종 PNG엔 미포함 */}
           {editMode === 'layout' && layoutPhase === 'edit' && (
-            <>
-              {colAisles.filter((c) => c < cols).map((c) => (
-                <div
-                  key={`cband-${c}`}
-                  style={{
-                    position: 'absolute',
-                    left: seatPixelCenter(1, c).x + SEAT / 2 + 2,
-                    top: -4,
-                    width: AISLE,
-                    height: gridPixelHeight + 8,
-                    background: 'rgba(99, 102, 241, 0.28)',
-                    borderRadius: 4,
-                    pointerEvents: 'none',
-                    zIndex: 4,
-                  }}
-                />
-              ))}
-              {rowAisles.filter((r) => r < rows).map((r) => (
-                <div
-                  key={`rband-${r}`}
-                  style={{
-                    position: 'absolute',
-                    top: seatPixelCenter(r, 1).y + SEAT / 2,
-                    left: -4,
-                    height: AISLE,
-                    width: gridPixelWidth + 8,
-                    background: 'rgba(99, 102, 241, 0.28)',
-                    borderRadius: 4,
-                    pointerEvents: 'none',
-                    zIndex: 4,
-                  }}
-                />
-              ))}
-            </>
+            <svg
+              style={{
+                position: 'absolute', top: 0, left: 0,
+                width: gridPixelWidth, height: gridPixelHeight,
+                pointerEvents: 'none', overflow: 'visible', zIndex: 5,
+              }}
+            >
+              {/* 세로 복도(활성): 실선 + 채운 캡, hover 시 진한 톤 */}
+              {colAisles.filter((c) => c < cols).map((c) => {
+                const x = (seatPixelCenter(1, c).x + seatPixelCenter(1, c + 1).x) / 2
+                const hovered = zoneMode === 'aisle' && hoverAisleCol === c
+                const color = hovered ? '#374151' : '#6b7280'
+                return (
+                  <g key={`vac-${c}`}>
+                    <line x1={x} y1={-6} x2={x} y2={gridPixelHeight + 6} stroke={color} strokeWidth={2} strokeLinecap="round" />
+                    <circle cx={x} cy={-6} r={4} fill={color} />
+                    <circle cx={x} cy={gridPixelHeight + 6} r={4} fill={color} />
+                  </g>
+                )
+              })}
+              {/* 가로 복도(활성) */}
+              {rowAisles.filter((r) => r < rows).map((r) => {
+                const y = (seatPixelCenter(r, 1).y + seatPixelCenter(r + 1, 1).y) / 2
+                const hovered = zoneMode === 'aisle' && hoverAisleRow === r
+                const color = hovered ? '#374151' : '#6b7280'
+                return (
+                  <g key={`hac-${r}`}>
+                    <line x1={-6} y1={y} x2={gridPixelWidth + 6} y2={y} stroke={color} strokeWidth={2} strokeLinecap="round" />
+                    <circle cx={-6} cy={y} r={4} fill={color} />
+                    <circle cx={gridPixelWidth + 6} cy={y} r={4} fill={color} />
+                  </g>
+                )
+              })}
+              {/* 세로 복도 후보: 빈 간격 hover 미리보기(점선 + 속 빈 캡) */}
+              {zoneMode === 'aisle' && hoverAisleCol != null && hoverAisleCol < cols && !colAisles.includes(hoverAisleCol) && (() => {
+                const c = hoverAisleCol
+                const x = (seatPixelCenter(1, c).x + seatPixelCenter(1, c + 1).x) / 2
+                return (
+                  <g>
+                    <line x1={x} y1={-6} x2={x} y2={gridPixelHeight + 6} stroke="#9ca3af" strokeWidth={1.5} strokeDasharray="4 3" strokeLinecap="round" />
+                    <circle cx={x} cy={-6} r={3.5} fill="white" stroke="#9ca3af" strokeWidth={1.5} />
+                    <circle cx={x} cy={gridPixelHeight + 6} r={3.5} fill="white" stroke="#9ca3af" strokeWidth={1.5} />
+                  </g>
+                )
+              })()}
+              {/* 가로 복도 후보: 빈 간격 hover 미리보기 */}
+              {zoneMode === 'aisle' && hoverAisleRow != null && hoverAisleRow < rows && !rowAisles.includes(hoverAisleRow) && (() => {
+                const r = hoverAisleRow
+                const y = (seatPixelCenter(r, 1).y + seatPixelCenter(r + 1, 1).y) / 2
+                return (
+                  <g>
+                    <line x1={-6} y1={y} x2={gridPixelWidth + 6} y2={y} stroke="#9ca3af" strokeWidth={1.5} strokeDasharray="4 3" strokeLinecap="round" />
+                    <circle cx={-6} cy={y} r={3.5} fill="white" stroke="#9ca3af" strokeWidth={1.5} />
+                    <circle cx={gridPixelWidth + 6} cy={y} r={3.5} fill="white" stroke="#9ca3af" strokeWidth={1.5} />
+                  </g>
+                )
+              })()}
+            </svg>
           )}
           {Array.from({ length: rows }, (_, ri) => {
             const row = ri + 1
@@ -343,8 +368,8 @@ export default function SeatMapPreview({
                           // 폭(w)은 레이아웃 편집 내내 8px 유지(좌표 일관성), 상호작용은 복도 모드에서만
                           const isLayoutEditPhase = editMode === 'layout' && layoutPhase === 'edit'
                           const canEditAisle = isLayoutEditPhase && zoneMode === 'aisle'
-                          const isHovered = canEditAisle && hoverAisleCol === col
                           const w = isAisleCol ? AISLE : isLayoutEditPhase ? 8 : 2
+                          // hover/활성 표시는 상단 SVG 가이드선 오버레이가 담당 (여긴 히트영역·클릭만)
                           return (
                             <div
                               key={`ca-${ri}-${ci}`}
@@ -356,18 +381,7 @@ export default function SeatMapPreview({
                               onMouseEnter={() => canEditAisle && setHoverAisleCol(col)}
                               onMouseLeave={() => setHoverAisleCol(null)}
                               onClick={(e) => { if (canEditAisle) { e.stopPropagation(); onToggleColAisle(col) } }}
-                            >
-                              {isHovered && (
-                                <div style={{
-                                  position: 'absolute',
-                                  top: 0, bottom: 0,
-                                  left: '50%', transform: 'translateX(-50%)',
-                                  width: w,
-                                  background: 'color-mix(in srgb, #6366f1 55%, transparent)',
-                                  borderRadius: 2,
-                                }} />
-                              )}
-                            </div>
+                            />
                           )
                         })()}
                       </>
@@ -378,8 +392,8 @@ export default function SeatMapPreview({
                 {row < rows && (() => {
                   const isLayoutEditPhase = editMode === 'layout' && layoutPhase === 'edit'
                   const canEditAisle = isLayoutEditPhase && zoneMode === 'aisle'
-                  const isHovered = canEditAisle && hoverAisleRow === row
                   const h = isAisleRow ? AISLE : isLayoutEditPhase ? 8 : 2
+                  // hover/활성 표시는 상단 SVG 가이드선 오버레이가 담당 (여긴 히트영역·클릭만)
                   return (
                     <div
                       key={`ra-${ri}`}
@@ -388,18 +402,7 @@ export default function SeatMapPreview({
                       onMouseEnter={() => canEditAisle && setHoverAisleRow(row)}
                       onMouseLeave={() => setHoverAisleRow(null)}
                       onClick={(e) => { if (canEditAisle) { e.stopPropagation(); onToggleAisle(row) } }}
-                    >
-                      {isHovered && (
-                        <div style={{
-                          position: 'absolute',
-                          left: 0, right: 0,
-                          top: '50%', transform: 'translateY(-50%)',
-                          height: h,
-                          background: 'color-mix(in srgb, #6366f1 55%, transparent)',
-                          borderRadius: 2,
-                        }} />
-                      )}
-                    </div>
+                    />
                   )
                 })()}
               </div>
