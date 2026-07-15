@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { CSSProperties } from "react";
 import type { ZoneMode } from "./types";
 import SeatMapForm from "./components/SeatMapForm";
@@ -88,7 +88,24 @@ function App() {
   } = useTheaterLayoutPreset({ user, config, setConfig, adminMode });
   const [mobileEditOpen, setMobileEditOpen] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false); // 모바일 확대 뷰어
-  const [justSaved, setJustSaved] = useState(false); // '현재 저장' 완료 피드백(2초)
+  // '현재 저장' 버튼 상태 머신: idle → saving(스피너 550ms) → saved(체크 2000ms) → idle
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">(
+    "idle",
+  );
+  const saveTimersRef = useRef<number[]>([]);
+  useEffect(
+    () => () => saveTimersRef.current.forEach(clearTimeout), // 언마운트 시 타이머 정리
+    [],
+  );
+  function handleSaveClick() {
+    saveTimersRef.current.forEach(clearTimeout); // 연타 시 진행 중 사이클 취소하고 처음부터
+    saveCurrentConfig();
+    setSaveState("saving");
+    saveTimersRef.current = [
+      window.setTimeout(() => setSaveState("saved"), 550),
+      window.setTimeout(() => setSaveState("idle"), 550 + 2000),
+    ];
+  }
   // 모바일 오버레이 화면 (시안 3): 좌석 설정 / 레이아웃 / 복도·제외 / 출입구
   const [mobileScreen, setMobileScreen] = useState<
     "seat" | "layout" | "zone" | "exit"
@@ -273,16 +290,46 @@ function App() {
           <div className="flex gap-1.5">
             <button
               type="button"
-              onClick={() => {
-                saveCurrentConfig();
-                setJustSaved(true);
-                window.setTimeout(() => setJustSaved(false), 2000);
-              }}
-              className={`flex-1 text-xs px-2 py-1.5 rounded font-medium transition-colors ${
-                justSaved ? "bg-green-500 text-white" : "btn-accent"
+              onClick={handleSaveClick}
+              style={
+                saveState === "idle"
+                  ? undefined
+                  : { backgroundColor: "var(--accent-hover)" }
+              }
+              className={`flex-1 flex items-center justify-center gap-1.5 text-xs px-2 py-1.5 rounded font-medium text-white transition-colors ${
+                saveState === "idle" ? "btn-accent" : ""
               }`}
             >
-              {justSaved ? "저장됨 ✓" : "현재 저장"}
+              {saveState === "saving" && (
+                <span
+                  className="inline-block w-3.5 h-3.5 rounded-full border-2 border-white/35 border-t-white shrink-0"
+                  style={{ animation: "spin 0.7s linear infinite" }}
+                />
+              )}
+              {saveState === "saved" && (
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  className="shrink-0"
+                >
+                  <path
+                    d="M4 12.5L9.5 18L20 6.5"
+                    stroke="white"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
+              <span>
+                {saveState === "saving"
+                  ? "저장 중..."
+                  : saveState === "saved"
+                    ? "저장됨"
+                    : "현재 저장"}
+              </span>
             </button>
             <button
               type="button"
