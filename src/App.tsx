@@ -87,6 +87,7 @@ function App() {
   } = useTheaterLayoutPreset({ user, config, setConfig, adminMode });
   const [mobileEditOpen, setMobileEditOpen] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false); // 모바일 확대 뷰어
+  const [justSaved, setJustSaved] = useState(false); // '현재 저장' 완료 피드백(2초)
   // 모바일 오버레이 화면 (시안 3): 좌석 설정 / 레이아웃 / 복도·제외 / 출입구
   const [mobileScreen, setMobileScreen] = useState<
     "seat" | "layout" | "zone" | "exit"
@@ -273,10 +274,16 @@ function App() {
           <div className="flex gap-1.5">
             <button
               type="button"
-              onClick={saveCurrentConfig}
-              className="flex-1 text-xs px-2 py-1.5 btn-accent rounded font-medium"
+              onClick={() => {
+                saveCurrentConfig();
+                setJustSaved(true);
+                window.setTimeout(() => setJustSaved(false), 2000);
+              }}
+              className={`flex-1 text-xs px-2 py-1.5 rounded font-medium transition-colors ${
+                justSaved ? "bg-green-500 text-white" : "btn-accent"
+              }`}
             >
-              현재 저장
+              {justSaved ? "저장됨 ✓" : "현재 저장"}
             </button>
             <button
               type="button"
