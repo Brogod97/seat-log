@@ -45,6 +45,10 @@ export function useTheaterLayoutPreset({ user, config, setConfig, adminMode, sav
   // 직전에 적용한 선택 키 — 마운트 시 복원된 선택으로 초기화해, 최초 진입/카탈로그 로드 때는
   // 선택이 "바뀐" 게 아니므로 자동 적용(및 초기화 confirm)을 건너뛴다
   const prevSelKeyRef = useRef(configKey(config));
+  // "이 키에 대해 지금 구조와 일치하는 저장 버전을 찾아 확인 완료"로 표시된 키.
+  // saves는 로그인 후 Firestore와 비동기로 동기화되므로, 상영관을 선택하는 시점엔 아직 동기화 전이라
+  // 매칭되는 버전이 안 보일 수 있다 — 이 경우 null로 남겨두고, saves가 갱신되면 재확인 effect가 재시도한다.
+  const mergedKeyRef = useRef<string | null>(null);
 
   // 계정이 관리자인지(raw) vs 실제 관리자 권한 발동 여부(effective = 계정관리자 && 모드ON)
   const accountIsAdmin = checkIsAdmin(user);
@@ -126,6 +130,9 @@ export function useTheaterLayoutPreset({ user, config, setConfig, adminMode, sav
       primeRanges: personalSave ? personalSave.primeRanges : [],
       watchedSeats: personalSave ? personalSave.watchedSeats : [],
     }));
+    // 매칭되는 버전을 찾았을 때만 "확인 완료"로 표시. 못 찾았으면 null로 남겨 saves가
+    // 나중에 동기화됐을 때 아래 재확인 effect가 다시 시도하게 한다.
+    mergedKeyRef.current = personalSave ? key : null;
   }
 
   // 선택(브랜드/지점/상영관)이 바뀌면 카탈로그에서 동기적으로 조회해 적용(있으면 프리셋, 없으면 빈 레이아웃)
@@ -157,6 +164,46 @@ export function useTheaterLayoutPreset({ user, config, setConfig, adminMode, sav
     applySelection(key);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.brand, config.branch, config.screen, catalogLoading]);
+
+  // saves가 뒤늦게 동기화돼 매칭되는 버전이 새로 나타난 경우 재시도 (선택 자체는 안 바뀌었으므로
+  // 위 effect는 다시 실행되지 않음 — saves 변경에 반응하는 이 effect가 대신 따라잡는다).
+  // 같은 선택에서 이미 확인 완료(mergedKeyRef)면 스킵하고, 사용자가 그 사이 직접 입력을 시작했다면
+  // (개인 레이어가 비어있지 않으면) 덮어쓰지 않는다.
+  useEffect(() => {
+    if (catalogLoading || !isKnownSelection) return;
+    const key = configKey(config);
+    if (mergedKeyRef.current === key) return;
+    // 구조는 configRef(=config)가 아니라 catalog에서 다시 계산한다 — 위 selection-change effect의
+    // setConfig가 아직 반영되기 전(같은 커밋의 effect 큐 안)이라 configRef가 "직전 상영관"의 구조를
+    // 들고 있는 짧은 순간이 있는데, 그때의 구조로 매칭하면 (둘 다 기본 구조인 경우 등) 엉뚱한 상영관의
+    // 저장본을 잘못 매칭할 위험이 있다. applySelection과 동일한 소스(catalog)로 계산해 이를 피한다.
+    const preset = catalog[key] ?? null;
+    const structure = {
+      rows: preset?.rows ?? DEFAULT_CONFIG.rows,
+      cols: preset?.cols ?? DEFAULT_CONFIG.cols,
+      rowAisles: preset?.rowAisles ?? [],
+      colAisles: preset?.colAisles ?? [],
+      excludedSeats: preset?.excludedSeats ?? [],
+      exits: preset?.exits ?? [],
+    };
+    const match = (saves[key] ?? []).find((v) => sameStructure(structure, v));
+    if (!match) return;
+    const c = configRef.current;
+    const untouched =
+      c.sightRows.length === 0 &&
+      c.primeRanges.length === 0 &&
+      c.watchedSeats.length === 0;
+    if (untouched) {
+      setConfig((cur) => ({
+        ...cur,
+        sightRows: match.sightRows,
+        primeRanges: match.primeRanges,
+        watchedSeats: match.watchedSeats,
+      }));
+    }
+    mergedKeyRef.current = key;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saves, catalog, config.brand, config.branch, config.screen, catalogLoading]);
 
   const presetExists = selectionComplete && !!catalog[configKey(config)];
 
