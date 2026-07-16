@@ -10,7 +10,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { isAdmin as checkIsAdmin } from "../utils/admin";
-import { isKnownBranch, isKnownScreen, CUSTOM } from "../data/theaters";
+import { CUSTOM } from "../data/theaters";
 import { naturalCompare, screenCompare } from "../utils/sort";
 import { sameStructure, samePersonalData } from "../utils/configCompare";
 import { configKey, DEFAULT_CONFIG } from "../utils/storage";
@@ -53,11 +53,9 @@ export function useTheaterLayoutPreset({ user, config, setConfig, adminMode, sav
   // 계정이 관리자인지(raw) vs 실제 관리자 권한 발동 여부(effective = 계정관리자 && 모드ON)
   const accountIsAdmin = checkIsAdmin(user);
   const admin = accountIsAdmin && adminMode;
-  const isKnownSelection =
-    isKnownBranch(config.brand, config.branch) &&
-    isKnownScreen(config.brand, config.screen);
-  // 게시 가능 여부: 정적 목록에 있는지가 아니라 브랜드·지점·상영관이 모두 채워졌는지로 판단.
-  // (관리자가 직접 입력(CUSTOM)한 지점/상영관도 게시할 수 있어야 함 — 자동 적용은 여전히 isKnownSelection 기준)
+  // 게시 가능 여부이자 자동 적용 기준: 정적 목록에 있는지가 아니라 브랜드·지점·상영관이 모두
+  // 채워졌는지로 판단. 관리자가 직접 입력(CUSTOM)한 지점/상영관도 게시·자동 적용 둘 다 동작해야 함
+  // (CUSTOM 입력 자체는 관리자에게만 노출되므로, 일반 사용자가 고르는 publicTheaters엔 영향 없음).
   const selectionComplete =
     !!config.brand &&
     !!config.branch &&
@@ -137,7 +135,7 @@ export function useTheaterLayoutPreset({ user, config, setConfig, adminMode, sav
 
   // 선택(브랜드/지점/상영관)이 바뀌면 카탈로그에서 동기적으로 조회해 적용(있으면 프리셋, 없으면 빈 레이아웃)
   useEffect(() => {
-    if (catalogLoading || !isKnownSelection) return;
+    if (catalogLoading || !selectionComplete) return;
     const key = configKey(config);
     // 선택 키가 실제로 바뀐 경우에만 적용 — 복원/카탈로그 로드 시엔 confirm이 뜨지 않게 함
     if (prevSelKeyRef.current === key) return;
@@ -170,7 +168,7 @@ export function useTheaterLayoutPreset({ user, config, setConfig, adminMode, sav
   // 같은 선택에서 이미 확인 완료(mergedKeyRef)면 스킵하고, 사용자가 그 사이 직접 입력을 시작했다면
   // (개인 레이어가 비어있지 않으면) 덮어쓰지 않는다.
   useEffect(() => {
-    if (catalogLoading || !isKnownSelection) return;
+    if (catalogLoading || !selectionComplete) return;
     const key = configKey(config);
     if (mergedKeyRef.current === key) return;
     // 구조는 configRef(=config)가 아니라 catalog에서 다시 계산한다 — 위 selection-change effect의
