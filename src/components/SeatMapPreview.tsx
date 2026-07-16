@@ -338,7 +338,9 @@ export default function SeatMapPreview({
                     const isAisleCol = colAisleSet.has(col)
                     const { bg, ring, highlight, excluded } = getSeatAppearance(row, col)
                     const exitSides = config.exits.filter((s) => s.row === row && s.col === col).map((s) => s.side)
-                    const inEditMode = editMode !== null
+                    // 모바일 출입구 화면은 editMode 없이 exitTapMode만 켜지므로, 여기서도 편집 중으로 취급해야
+                    // 제외석이 빈 칸으로 죽지 않고 탭할 수 있다 (PC는 zoneMode='exit'이 layout 편집 안이라 이미 가능)
+                    const inEditMode = editMode !== null || exitTapMode
                     // 제외석은 편집 중엔 ×로 보여 되돌릴 수 있게, 일반 보기·최종 이미지에선 빈 칸(투명)
                     const showAsBlank = excluded && !inEditMode
 
