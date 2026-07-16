@@ -2,7 +2,8 @@ import { createPortal } from 'react-dom'
 import type { SeatMapConfig, Range, ExitSide, EditMode, ZoneMode } from '../types'
 import { calcCenterCols } from '../utils/centerCols'
 import { indexToLabel } from '../utils/rowLabel'
-import { makeSeatGeometry, normalizeRange, exitLineStyle } from '../utils/seatGeometry'
+import { makeSeatGeometry, normalizeRange } from '../utils/seatGeometry'
+import { ExitMarker, ExitGauge } from './preview/ExitMarker'
 import { MODE_RING } from '../utils/seatStyles'
 import { GhostGrid } from './preview/GhostGrid'
 import { SeatPopup } from './preview/SeatPopup'
@@ -65,6 +66,7 @@ export default function SeatMapPreview({
 
   const rowAisleSet = new Set(rowAisles)
   const colAisleSet = new Set(colAisles)
+  const hasSideExit = config.exits.some((e) => e.side === 'left' || e.side === 'right')
   const centerCols = calcCenterCols(cols, colAisles)
 
 
@@ -203,7 +205,7 @@ export default function SeatMapPreview({
         ))}
         {config.exits.length > 0 && (
           <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-1.5 rounded-sm bg-gray-400" />출입구
+            <ExitGauge />출입구
           </span>
         )}
       </div>
@@ -261,7 +263,8 @@ export default function SeatMapPreview({
           </div>
         </div>
         {/* 행 라벨(A~) 좌우 + 그리드 */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+        {/* 좌/우 출입구 게이지는 좌석 변에서 16px 바깥까지 나가므로, 그 경우에만 행 라벨과의 간격을 벌려 겹침 방지 */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: hasSideExit ? 26 : 8 }}>
           {rowLabelCol}
         <div style={{ display: 'inline-block', userSelect: 'none', position: 'relative' }}>
           {/* 복도 가이드선 (레이아웃 편집 전용) — 빈 통로 + 가이드선 방식.
@@ -371,7 +374,7 @@ export default function SeatMapPreview({
                               : <span style={{ fontSize: 9, lineHeight: 1 }}>{indexToLabel(ri)}{col}</span>
                           }
                           {exitSides.map((side) => (
-                            <div key={side} style={exitLineStyle(side)} />
+                            <ExitMarker key={side} side={side} seat={SEAT} />
                           ))}
                         </div>
 

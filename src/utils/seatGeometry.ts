@@ -1,6 +1,5 @@
 // 좌석표 순수 기하/판정 (React 무관 순수 함수)
-import type { CSSProperties } from 'react'
-import type { Range, ExitSide } from '../types'
+import type { Range } from '../types'
 
 export interface SeatPos { row: number; col: number }
 
@@ -17,16 +16,6 @@ export function inRange(row: number, col: number, r: Range) {
   return row >= r.rowStart && row <= r.rowEnd && col >= r.colStart && col <= r.colEnd
 }
 
-// 출입구 선: 좌석의 바깥 변에 문 위치를 표시
-export function exitLineStyle(side: ExitSide): CSSProperties {
-  // 출입구는 핵심 정보가 아니므로 강세를 낮춤 (연한 회색·얇게)
-  const C = '#9ca3af', T = 3, OUT = -5
-  const base: CSSProperties = { position: 'absolute', background: C, borderRadius: 2, zIndex: 5 }
-  if (side === 'left') return { ...base, left: OUT, top: 2, bottom: 2, width: T }
-  if (side === 'right') return { ...base, right: OUT, top: 2, bottom: 2, width: T }
-  if (side === 'top') return { ...base, top: OUT, left: 2, right: 2, height: T }
-  return { ...base, bottom: OUT, left: 2, right: 2, height: T }  // bottom
-}
 
 // 좌석 픽셀 좌표 계산기 (런타임 값 의존 → 팩토리로 생성)
 // 열: 행이 flex(gap:2)라 gap div 양쪽에 2px씩 붙음 → COL_STEP = seat + 2 + gap_div + 2
