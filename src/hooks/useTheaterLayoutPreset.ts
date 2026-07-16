@@ -135,8 +135,16 @@ export function useTheaterLayoutPreset({ user, config, setConfig, adminMode, sav
 
   // 선택(브랜드/지점/상영관)이 바뀌면 카탈로그에서 동기적으로 조회해 적용(있으면 프리셋, 없으면 빈 레이아웃)
   useEffect(() => {
-    if (catalogLoading || !selectionComplete) return;
+    if (catalogLoading) return;
     const key = configKey(config);
+    if (!selectionComplete) {
+      // 초기화 등으로 선택이 비워진 경우 — prevSelKeyRef를 그대로 두면, 나중에 초기화 전과
+      // 똑같은 상영관을 다시 골랐을 때 "선택이 안 바뀐 것"으로 오인해 자동 적용을 건너뛰게 된다.
+      // 이 "빈 선택" 상태도 하나의 선택으로 기록해둬야 다음 선택이 항상 변경으로 인식된다.
+      prevSelKeyRef.current = key;
+      mergedKeyRef.current = null;
+      return;
+    }
     // 선택 키가 실제로 바뀐 경우에만 적용 — 복원/카탈로그 로드 시엔 confirm이 뜨지 않게 함
     if (prevSelKeyRef.current === key) return;
     const prevKey = prevSelKeyRef.current;
