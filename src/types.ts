@@ -39,6 +39,12 @@ export type EditMode = 'layout' | 'prime' | 'watched' | null
 // 레이아웃 편집(2단계) 안의 구역 지정 모드: 복도 / 제외구역 / 출입구
 export type ZoneMode = 'aisle' | 'excluded' | 'exit'
 
+// 사용자가 "현재 저장"으로 남긴 개인 저장 버전. 구조가 다르면 별도 버전으로 쌓이므로
+// savedAt(마지막으로 이 버전을 저장한 시각)으로 여러 버전을 구분한다. 마이그레이션된 예전 데이터는 없을 수 있음.
+export interface SavedVersion extends SeatMapConfig {
+  savedAt?: number // epoch ms
+}
+
 // 관리자가 게시하는 지점 공용 좌석 레이아웃 (물리 구조만, 개인 리뷰 데이터 제외)
 export interface TheaterLayoutPreset {
   brand: string

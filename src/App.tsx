@@ -5,7 +5,7 @@ import SeatMapForm from "./components/SeatMapForm";
 import { themeFor } from "./theme";
 import { SunIcon, MoonIcon, ResetIcon, ChevronIcon } from "./components/icons";
 import { AccountCard } from "./components/sidebar/AccountCard";
-import { SavedList } from "./components/sidebar/SavedList";
+import { StaleSaveModal } from "./components/StaleSaveModal";
 import { PreviewArea } from "./components/preview/PreviewArea";
 import { MobileEditOverlay } from "./components/mobile/MobileEditOverlay";
 import { PreviewViewer } from "./components/mobile/PreviewViewer";
@@ -17,7 +17,7 @@ import { useSidebarLayout } from "./hooks/useSidebarLayout";
 import { useSavedConfigs } from "./hooks/useSavedConfigs";
 import { useTheaterLayoutPreset } from "./hooks/useTheaterLayoutPreset";
 import { useImageDownload } from "./hooks/useImageDownload";
-import { loadAdminMode, writeAdminMode } from "./utils/storage";
+import { loadAdminMode, writeAdminMode, configKey } from "./utils/storage";
 
 function App() {
   const {
@@ -63,7 +63,6 @@ function App() {
     login,
     logout,
     saveCurrentConfig,
-    loadSavedConfig,
     deleteSavedConfig,
     exportJson,
     importJson,
@@ -84,10 +83,13 @@ function App() {
     catalogLoading,
     presetExists,
     selectionComplete,
+    personalDataRestored,
+    staleVersions,
     publishPreset,
-  } = useTheaterLayoutPreset({ user, config, setConfig, adminMode });
+  } = useTheaterLayoutPreset({ user, config, setConfig, adminMode, saves });
   const [mobileEditOpen, setMobileEditOpen] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false); // 모바일 확대 뷰어
+  const [viewingStaleSnapshot, setViewingStaleSnapshot] = useState(false);
   // '현재 저장' 버튼 상태 머신: idle → saving(스피너 550ms) → saved(체크 2000ms) → idle
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">(
     "idle",
@@ -98,6 +100,8 @@ function App() {
     [],
   );
   function handleSaveClick() {
+    // 구조가 달라도 기존 버전을 덮어쓰지 않고 새 버전으로 추가하므로(useSavedConfigs의
+    // saveCurrentConfig), 더 이상 예전 저장본이 사라질 위험이 없어 확인창이 필요 없다.
     saveTimersRef.current.forEach(clearTimeout); // 연타 시 진행 중 사이클 취소하고 처음부터
     saveCurrentConfig();
     setSaveState("saving");
@@ -280,12 +284,6 @@ function App() {
             </button>
           )}
 
-          <SavedList
-            saves={saves}
-            onLoad={loadSavedConfig}
-            onDelete={deleteSavedConfig}
-          />
-
           {/* 저장 / JSON */}
           <div className="flex gap-1.5">
             <button
@@ -331,6 +329,16 @@ function App() {
                     : "현재 저장"}
               </span>
             </button>
+            {(saves[configKey(config)]?.length ?? 0) > 0 && (
+              <button
+                type="button"
+                onClick={() => deleteSavedConfig(configKey(config))}
+                className="text-xs px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 hover:border-red-200 transition-colors"
+                title="이 상영관에 저장한 개인 데이터 삭제"
+              >
+                삭제
+              </button>
+            )}
             <button
               type="button"
               onClick={exportJson}
@@ -371,6 +379,9 @@ function App() {
           presetExists={presetExists}
           onPublishPreset={publishPreset}
           compact={compact}
+          personalDataRestored={personalDataRestored}
+          staleVersions={staleVersions}
+          onViewStaleSnapshot={() => setViewingStaleSnapshot(true)}
         />
 
         {/* 이미지 다운로드 — 패널 하단 (모바일에선 페이지 맨 아래) */}
@@ -473,6 +484,14 @@ function App() {
             presetExists={presetExists}
             canPublish={selectionComplete}
             onPublish={publishPreset}
+          />
+        )}
+
+        {/* 다른 구조로 저장해둔 예전 개인 저장본들 — 읽기 전용 열람 */}
+        {viewingStaleSnapshot && staleVersions.length > 0 && (
+          <StaleSaveModal
+            versions={staleVersions}
+            onClose={() => setViewingStaleSnapshot(false)}
           />
         )}
       </main>

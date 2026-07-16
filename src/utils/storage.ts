@@ -1,5 +1,5 @@
 // localStorage 영속화 헬퍼 + 기본 설정 (React 무관 순수 함수)
-import type { SeatMapConfig } from "../types";
+import type { SeatMapConfig, SavedVersion } from "../types";
 
 export const STORAGE_KEY = "seat_map_current";
 export const SAVES_KEY = "seat_map_saves";
@@ -50,15 +50,29 @@ export function loadConfig(): SeatMapConfig {
   return DEFAULT_CONFIG;
 }
 
-export function loadSaves(): Record<string, SeatMapConfig> {
+// saves 한 항목은 상영관(브랜드|지점|상영관) 당 "구조별로 하나씩"인 버전 배열이다.
+// 예전 형식(버전 배열 이전, 상영관당 config 1개)으로 저장된 데이터를 배열로 감싸 마이그레이션한다.
+export function normalizeSaves(
+  raw: Record<string, unknown>,
+): Record<string, SavedVersion[]> {
+  const result: Record<string, SavedVersion[]> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (Array.isArray(value)) result[key] = value as SavedVersion[];
+    else if (value && typeof value === "object")
+      result[key] = [value as SavedVersion];
+  }
+  return result;
+}
+
+export function loadSaves(): Record<string, SavedVersion[]> {
   try {
-    return JSON.parse(localStorage.getItem(SAVES_KEY) ?? "{}");
+    return normalizeSaves(JSON.parse(localStorage.getItem(SAVES_KEY) ?? "{}"));
   } catch {
     return {};
   }
 }
 
-export function writeSaves(saves: Record<string, SeatMapConfig>) {
+export function writeSaves(saves: Record<string, SavedVersion[]>) {
   try {
     localStorage.setItem(SAVES_KEY, JSON.stringify(saves));
   } catch {}

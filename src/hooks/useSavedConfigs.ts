@@ -14,7 +14,8 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { auth, googleProvider, db } from "../firebase";
-import type { SeatMapConfig, EditMode } from "../types";
+import type { SeatMapConfig, EditMode, SavedVersion } from "../types";
+import { sameStructure } from "../utils/configCompare";
 import {
   LAST_SAVED_KEY,
   DEFAULT_CONFIG,
@@ -22,6 +23,7 @@ import {
   configKey,
   loadSaves,
   writeSaves,
+  normalizeSaves,
   loadOwner,
   writeOwner,
   clearLocalPersonalData,
@@ -35,7 +37,7 @@ interface Params {
 
 // 저장된 좌석표 목록 + 기기 간 Firebase 동기화 (로그인 시에만, local-first)
 export function useSavedConfigs({ config, setConfig, setEditMode }: Params) {
-  const [saves, setSaves] = useState<Record<string, SeatMapConfig>>(loadSaves);
+  const [saves, setSaves] = useState<Record<string, SavedVersion[]>>(loadSaves);
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(() => {
@@ -47,7 +49,7 @@ export function useSavedConfigs({ config, setConfig, setEditMode }: Params) {
 
   const savesDoc = (uid: string) => doc(db, "users", uid, "state", "saves");
 
-  async function pushSaves(next: Record<string, SeatMapConfig>) {
+  async function pushSaves(next: Record<string, SavedVersion[]>) {
     const u = auth.currentUser;
     if (!u) return;
     try {
@@ -61,7 +63,13 @@ export function useSavedConfigs({ config, setConfig, setEditMode }: Params) {
   }
 
   useEffect(() => {
+    // StrictMode(dev)는 이 effect를 mount→cleanup→mount로 두 번 실행한다. onAuthStateChanged 콜백은
+    // 비동기라 정리(cleanup)가 먼저 끝나버리면, 정리된 인스턴스의 getDoc/setDoc 체인이 뒤늦게 이어져
+    // 방금 사용자가 저장한 최신 saves를 마운트 시점의 오래된 병합 결과로 덮어쓸 수 있다.
+    // ignore 플래그로 정리된 인스턴스의 이후 작업(state 반영·구독 등록)을 무효화해 이 레이스를 막는다.
+    let ignore = false;
     const unsubAuth = onAuthStateChanged(auth, async (u) => {
+      if (ignore) return;
       setUser(u);
       setAuthReady(true);
       // 이전 구독 정리
@@ -85,18 +93,20 @@ export function useSavedConfigs({ config, setConfig, setEditMode }: Params) {
       try {
         // 최초: 로컬 + 원격 병합 (원격 우선), 다시 업로드
         const snap = await getDoc(ref);
-        const remote = (
-          snap.exists() ? (snap.data().saves ?? {}) : {}
-        ) as Record<string, SeatMapConfig>;
+        if (ignore) return;
+        const remote = normalizeSaves(
+          snap.exists() ? (snap.data().saves ?? {}) : {},
+        );
         const local = loadSaves();
         const merged = { ...local, ...remote };
         setSaves(merged);
         writeSaves(merged);
         await setDoc(ref, { saves: merged, updatedAt: serverTimestamp() });
+        if (ignore) return;
         // 이후: 다른 기기 변경을 실시간 반영
         unsubSnapRef.current = onSnapshot(ref, (s) => {
           if (s.metadata.hasPendingWrites) return; // 내 쓰기는 무시(루프 방지)
-          const rs = (s.data()?.saves ?? {}) as Record<string, SeatMapConfig>;
+          const rs = normalizeSaves(s.data()?.saves ?? {});
           setSaves(rs);
           writeSaves(rs);
         });
@@ -105,6 +115,7 @@ export function useSavedConfigs({ config, setConfig, setEditMode }: Params) {
       }
     });
     return () => {
+      ignore = true;
       unsubAuth();
       if (unsubSnapRef.current) unsubSnapRef.current();
     };
@@ -136,7 +147,15 @@ export function useSavedConfigs({ config, setConfig, setEditMode }: Params) {
 
   function saveCurrentConfig() {
     const key = configKey(config);
-    const next = { ...saves, [key]: config };
+    const versions = saves[key] ?? [];
+    // 지금 구조와 일치하는 버전이 있으면 그 버전만 갱신, 없으면 새 버전으로 추가(기존 버전은 보존)
+    const matchIdx = versions.findIndex((v) => sameStructure(config, v));
+    const savedVersion: SavedVersion = { ...config, savedAt: Date.now() };
+    const nextVersions =
+      matchIdx >= 0
+        ? versions.map((v, i) => (i === matchIdx ? savedVersion : v))
+        : [...versions, savedVersion];
+    const next = { ...saves, [key]: nextVersions };
     setSaves(next);
     writeSaves(next);
     pushSaves(next);
@@ -145,14 +164,6 @@ export function useSavedConfigs({ config, setConfig, setEditMode }: Params) {
     try {
       localStorage.setItem(LAST_SAVED_KEY, String(now));
     } catch {}
-  }
-
-  function loadSavedConfig(key: string) {
-    const saved = saves[key];
-    if (saved) {
-      setConfig({ ...DEFAULT_CONFIG, ...saved });
-      setEditMode(null);
-    }
   }
 
   function deleteSavedConfig(key: string) {
@@ -183,7 +194,7 @@ export function useSavedConfigs({ config, setConfig, setEditMode }: Params) {
       try {
         const parsed = JSON.parse(ev.target?.result as string);
         if (typeof parsed === "object" && parsed !== null) {
-          const next = { ...saves, ...parsed };
+          const next = { ...saves, ...normalizeSaves(parsed) };
           setSaves(next);
           writeSaves(next);
           pushSaves(next);
@@ -205,7 +216,6 @@ export function useSavedConfigs({ config, setConfig, setEditMode }: Params) {
     login,
     logout,
     saveCurrentConfig,
-    loadSavedConfig,
     deleteSavedConfig,
     exportJson,
     importJson,

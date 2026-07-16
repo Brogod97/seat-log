@@ -1,4 +1,4 @@
-import type { SeatMapConfig, EditMode } from '../types'
+import type { SeatMapConfig, EditMode, SavedVersion } from '../types'
 import { useState } from 'react'
 import { indexToLabel } from '../utils/rowLabel'
 import { THEATERS, BRAND_LIST, CUSTOM, isKnownBranch, isKnownScreen } from '../data/theaters'
@@ -21,6 +21,9 @@ interface Props {
   presetExists: boolean
   onPublishPreset: () => Promise<boolean>
   compact: boolean  // 모바일: 레이아웃 편집/게시는 편집 오버레이에서 하므로 사이드바 버튼은 숨김
+  personalDataRestored: boolean          // 개인 저장(시선일치/명당/실관람)이 구조 일치로 자동 병합됐는지
+  staleVersions: SavedVersion[]          // 다른 구조로 저장해둔 버전들 (있으면 열람 링크 노출)
+  onViewStaleSnapshot: () => void
 }
 
 type BtnColor = 'red' | 'yellow' | 'green' | 'indigo' | 'gray'
@@ -73,6 +76,7 @@ export default function SeatMapForm({
   config, onChange, editMode,
   onEnterEditMode, onEnterGridResize, onCancelEditMode, onCompleteEditMode,
   isAdmin, publicTheaters, catalogLoading, presetExists, onPublishPreset, compact,
+  personalDataRestored, staleVersions, onViewStaleSnapshot,
 }: Props) {
   function update(partial: Partial<SeatMapConfig>) {
     onChange({ ...config, ...partial })
@@ -111,9 +115,25 @@ export default function SeatMapForm({
           지점 레이아웃을 불러오는 중…
         </div>
       )}
-      {editMode === null && !catalogLoading && presetExists && (
-        <div className="mb-3 px-3 py-2 bg-accent-soft rounded text-xs text-accent">
-          이 상영관의 저장된 레이아웃을 불러왔어요
+      {editMode === null && !catalogLoading && selectionComplete && (personalDataRestored || staleVersions.length > 0 || presetExists) && (
+        <div className="mb-3 px-3 py-2 bg-accent-soft rounded text-xs text-accent space-y-1">
+          <p>
+            {personalDataRestored
+              ? presetExists
+                ? '이 상영관의 저장된 레이아웃과 내 시선일치/명당/실관람 데이터를 불러왔어요'
+                : '저장해둔 시선일치/명당/실관람 데이터를 불러왔어요'
+              : staleVersions.length > 0
+                ? presetExists
+                  ? '레이아웃은 불러왔지만, 상영관 구조가 바뀌어 예전에 저장한 개인 데이터는 표시할 수 없어요.'
+                  : '아직 게시된 레이아웃은 없지만, 예전에 저장한 개인 데이터가 있어요(지금 구조와는 달라요).'
+                : '이 상영관의 저장된 레이아웃을 불러왔어요'}
+          </p>
+          {/* 현재 버전 병합 여부와 무관하게, 다른 구조로 저장해둔 버전이 있으면 상시 열람 가능 */}
+          {staleVersions.length > 0 && (
+            <button type="button" onClick={onViewStaleSnapshot} className="underline font-medium hover:opacity-80">
+              예전 저장 내용 보기{staleVersions.length > 1 ? ` (${staleVersions.length}개)` : ''}
+            </button>
+          )}
         </div>
       )}
 

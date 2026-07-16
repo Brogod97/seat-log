@@ -12,14 +12,16 @@ import { db } from "../firebase";
 import { isAdmin as checkIsAdmin } from "../utils/admin";
 import { isKnownBranch, isKnownScreen, CUSTOM } from "../data/theaters";
 import { naturalCompare, screenCompare } from "../utils/sort";
+import { sameStructure, samePersonalData } from "../utils/configCompare";
 import { configKey, DEFAULT_CONFIG } from "../utils/storage";
-import type { SeatMapConfig, TheaterLayoutPreset } from "../types";
+import type { SeatMapConfig, TheaterLayoutPreset, SavedVersion } from "../types";
 
 interface Params {
   user: User | null;
   config: SeatMapConfig;
   setConfig: Dispatch<SetStateAction<SeatMapConfig>>;
   adminMode: boolean; // 관리자 계정이어도 이 토글이 꺼져 있으면 일반 사용자로 동작
+  saves: Record<string, SavedVersion[]>; // 사용자 개인 저장(상영관별, 구조별 버전 배열) — 구조 일치 시 자동 병합용
 }
 
 export interface PublicTheaterData {
@@ -30,7 +32,7 @@ export interface PublicTheaterData {
 const COLLECTION = "theaterLayouts";
 
 // 관리자가 게시한 지점 공용 레이아웃 전체를 한 번에 불러와(catalog) select 옵션 구성 + 자동 적용/게시에 사용
-export function useTheaterLayoutPreset({ user, config, setConfig, adminMode }: Params) {
+export function useTheaterLayoutPreset({ user, config, setConfig, adminMode, saves }: Params) {
   const [catalog, setCatalog] = useState<Record<string, TheaterLayoutPreset>>(
     {},
   );
@@ -102,30 +104,27 @@ export function useTheaterLayoutPreset({ user, config, setConfig, adminMode }: P
     return result;
   }, [catalog]);
 
-  function applyPhysicalLayout(preset: TheaterLayoutPreset | null) {
-    const c = configRef.current;
-    const hasPersonalData =
-      c.sightRows.length > 0 ||
-      c.primeRanges.length > 0 ||
-      c.watchedSeats.length > 0;
-    if (
-      hasPersonalData &&
-      !confirm(
-        "지점을 변경하면 현재 시선일치/명당/실관람 표시가 초기화돼요. 계속할까요?",
-      )
-    )
-      return;
-    setConfig((cur) => ({
-      ...cur,
+  function applySelection(key: string) {
+    const preset = catalog[key] ?? null;
+    const structure = {
       rows: preset?.rows ?? DEFAULT_CONFIG.rows,
       cols: preset?.cols ?? DEFAULT_CONFIG.cols,
       rowAisles: preset?.rowAisles ?? [],
       colAisles: preset?.colAisles ?? [],
       excludedSeats: preset?.excludedSeats ?? [],
       exits: preset?.exits ?? [],
-      sightRows: [],
-      primeRanges: [],
-      watchedSeats: [],
+    };
+    // 구조가 완전히 같은 버전이 있을 때만 개인 데이터(시선일치/명당/실관람)를 함께 병합.
+    // 다르면 좌표가 같아도 좌석의 의미가 달라졌을 수 있어 자동 병합하지 않는다
+    // (개인 데이터는 버전 배열에 그대로 보존 — saveCurrentConfig가 덮어쓰지 않고 새 버전으로 추가함).
+    const versions = saves[key] ?? [];
+    const personalSave = versions.find((v) => sameStructure(structure, v));
+    setConfig((cur) => ({
+      ...cur,
+      ...structure,
+      sightRows: personalSave ? personalSave.sightRows : [],
+      primeRanges: personalSave ? personalSave.primeRanges : [],
+      watchedSeats: personalSave ? personalSave.watchedSeats : [],
     }));
   }
 
@@ -133,14 +132,52 @@ export function useTheaterLayoutPreset({ user, config, setConfig, adminMode }: P
   useEffect(() => {
     if (catalogLoading || !isKnownSelection) return;
     const key = configKey(config);
-    // 선택 키가 실제로 바뀐 경우에만 적용 — 복원/카탈로그 로드 시엔 초기화 confirm이 뜨지 않게 함
+    // 선택 키가 실제로 바뀐 경우에만 적용 — 복원/카탈로그 로드 시엔 confirm이 뜨지 않게 함
     if (prevSelKeyRef.current === key) return;
+    const prevKey = prevSelKeyRef.current;
     prevSelKeyRef.current = key;
-    applyPhysicalLayout(catalog[key] ?? null);
+
+    // 저장하지 않은 변경사항이 실제로 있을 때만 경고 (이전 상영관의, 같은 구조 저장본과 비교)
+    const c = configRef.current;
+    const hasPersonalData =
+      c.sightRows.length > 0 ||
+      c.primeRanges.length > 0 ||
+      c.watchedSeats.length > 0;
+    const prevVersions = saves[prevKey] ?? [];
+    const prevSave = prevVersions.find((v) => sameStructure(c, v));
+    const isDirty = hasPersonalData && (!prevSave || !samePersonalData(c, prevSave));
+    if (
+      isDirty &&
+      !confirm(
+        "저장하지 않은 시선일치/명당/실관람 변경사항이 있어요. 지점을 바꾸면 사라져요. 계속할까요?",
+      )
+    )
+      return;
+
+    applySelection(key);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.brand, config.branch, config.screen, catalogLoading]);
 
   const presetExists = selectionComplete && !!catalog[configKey(config)];
+
+  // 현재 선택된 상영관의 저장 버전들 중 지금 구조와 일치하는 게 있는지, 없다면 가장 최근 버전
+  // (읽기 전용 열람용). 구조 필드는 사용자가 직접 편집하지 않아(관리자 전용) config 변경에 안정적으로 반응 가능.
+  const currentVersions = saves[configKey(config)] ?? [];
+  const currentStructure = {
+    rows: config.rows,
+    cols: config.cols,
+    rowAisles: config.rowAisles,
+    colAisles: config.colAisles,
+    excludedSeats: config.excludedSeats,
+    exits: config.exits,
+  };
+  const matchingSave = currentVersions.find((v) => sameStructure(currentStructure, v));
+  const personalDataRestored = selectionComplete && !!matchingSave;
+  // 지금 구조에 병합된 버전과 별개로, 다른 구조로 저장해둔 버전들이 있으면 전부 상시 열람 가능하게 노출.
+  // 현재 버전이 정상 병합됐는지와 무관 — 구조가 여러 번 바뀌었어도 예전 버전 전부를 볼 수 있어야 함.
+  const staleVersions = selectionComplete
+    ? currentVersions.filter((v) => v !== matchingSave)
+    : [];
 
   // 성공 시 true, 실패 시 false 반환 — 버튼이 로딩/완료 상태를 표시하는 데 사용
   async function publishPreset(): Promise<boolean> {
@@ -179,6 +216,8 @@ export function useTheaterLayoutPreset({ user, config, setConfig, adminMode }: P
     catalogLoading,
     presetExists,
     selectionComplete,      // 게시 가능한(브랜드·지점·상영관 모두 채워진) 선택인지
+    personalDataRestored,   // 현재 상영관의 개인 저장이 구조 일치로 자동 병합됐는지
+    staleVersions,          // 다른 구조로 저장해둔 버전들 (읽기 전용 열람용, 여러 개일 수 있음)
     publishPreset,
     refetchCatalog: fetchCatalog,
   };
