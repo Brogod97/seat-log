@@ -1,5 +1,5 @@
 // localStorage 영속화 헬퍼 + 기본 설정 (React 무관 순수 함수)
-import type { SeatMapConfig, SavedVersion } from "../types";
+import type { SeatMapConfig, SavedVersion, WatchedSeat } from "../types";
 
 export const STORAGE_KEY = "seat_map_current";
 export const SAVES_KEY = "seat_map_saves";
@@ -42,24 +42,48 @@ export function loadTheme(): "light" | "dark" {
   return "light";
 }
 
+// 실관람 좌석 마이그레이션: 예전 형식({ row, col, memo? } — 좌석당 메모 1개)을
+// 기록 배열 형식({ row, col, records: WatchedRecord[] })으로 변환한다.
+// 이미 새 형식이면 그대로 통과. loadConfig / normalizeSaves 두 경로에서 공통 사용.
+function normalizeWatchedSeats(raw: unknown): WatchedSeat[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((s) => {
+    const seat = s as { row: number; col: number; memo?: string; records?: unknown };
+    if (Array.isArray(seat.records))
+      return { row: seat.row, col: seat.col, records: seat.records as WatchedSeat["records"] };
+    return {
+      row: seat.row,
+      col: seat.col,
+      records: seat.memo?.trim() ? [{ memo: seat.memo }] : [],
+    };
+  });
+}
+
+// config 한 건의 형식 마이그레이션 (현재는 watchedSeats만 해당)
+export function normalizeConfig<T extends SeatMapConfig>(c: T): T {
+  return { ...c, watchedSeats: normalizeWatchedSeats(c.watchedSeats) };
+}
+
 export function loadConfig(): SeatMapConfig {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return { ...DEFAULT_CONFIG, ...JSON.parse(saved) };
+    if (saved) return normalizeConfig({ ...DEFAULT_CONFIG, ...JSON.parse(saved) });
   } catch {}
   return DEFAULT_CONFIG;
 }
 
 // saves 한 항목은 상영관(브랜드|지점|상영관) 당 "구조별로 하나씩"인 버전 배열이다.
 // 예전 형식(버전 배열 이전, 상영관당 config 1개)으로 저장된 데이터를 배열로 감싸 마이그레이션한다.
+// 각 버전의 watchedSeats도 기록 배열 형식으로 함께 마이그레이션 (localStorage/Firestore/JSON 공통 경로).
 export function normalizeSaves(
   raw: Record<string, unknown>,
 ): Record<string, SavedVersion[]> {
   const result: Record<string, SavedVersion[]> = {};
   for (const [key, value] of Object.entries(raw)) {
-    if (Array.isArray(value)) result[key] = value as SavedVersion[];
+    if (Array.isArray(value))
+      result[key] = (value as SavedVersion[]).map(normalizeConfig);
     else if (value && typeof value === "object")
-      result[key] = [value as SavedVersion];
+      result[key] = [normalizeConfig(value as SavedVersion)];
   }
   return result;
 }

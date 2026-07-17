@@ -4,6 +4,7 @@ import { indexToLabel } from '../utils/rowLabel'
 import { THEATERS, BRAND_LIST, CUSTOM, isKnownBranch, isKnownScreen } from '../data/theaters'
 import { FREQ_KEY } from '../utils/storage'
 import { screenCompare } from '../utils/sort'
+import { compareRecordsDesc, formatRecordTime } from '../utils/watchedRecords'
 import type { PublicTheaterData } from '../hooks/useTheaterLayoutPreset'
 import { PublishLayoutButton } from './PublishLayoutButton'
 
@@ -232,6 +233,7 @@ export default function SeatMapForm({
           <p className="text-xs text-gray-400 dark:text-gray-500">없음</p>
         ) : (
           <div className="flex flex-col gap-1">
+            {/* 기록 관리(추가/수정/삭제)는 좌석 팝업에서 — 여기선 요약 열람 + 좌석 삭제만 (중복 편집 지점 방지) */}
             {[...config.watchedSeats]
               .map((s, i) => ({ s, i }))
               .sort((a, b) => a.s.row !== b.s.row ? a.s.row - b.s.row : a.s.col - b.s.col)
@@ -244,24 +246,39 @@ export default function SeatMapForm({
                       className="flex items-center gap-1.5 text-xs text-yellow-800 hover:text-yellow-900"
                     >
                       <span className="font-medium">{indexToLabel(s.row - 1)}{s.col}</span>
-                      {s.memo?.trim() && <span title="메모 있음">📝</span>}
+                      {s.records.length > 0 && (
+                        <span className="text-[10px] px-1 rounded-full bg-yellow-200 text-yellow-800">{s.records.length}</span>
+                      )}
                       <span className="text-yellow-400">{expandedWatched === i ? '▾' : '▸'}</span>
                     </button>
                     <button
                       type="button"
-                      onClick={() => { update({ watchedSeats: config.watchedSeats.filter((_, j) => j !== i) }); if (expandedWatched === i) setExpandedWatched(null) }}
+                      onClick={() => {
+                        if (s.records.length >= 2 && !confirm(`관람 기록 ${s.records.length}건이 모두 삭제돼요. 실관람을 해제할까요?`)) return
+                        update({ watchedSeats: config.watchedSeats.filter((_, j) => j !== i) }); if (expandedWatched === i) setExpandedWatched(null)
+                      }}
                       className="text-yellow-500 hover:text-red-600 text-xs"
                     >×</button>
                   </div>
                   {expandedWatched === i && (
-                    <div className="px-2 pb-2">
-                      <textarea
-                        value={s.memo ?? ''}
-                        onChange={(e) => update({ watchedSeats: config.watchedSeats.map((w, j) => j === i ? { ...w, memo: e.target.value } : w) })}
-                        placeholder="좌석 후기 메모…"
-                        rows={2}
-                        className="w-full text-xs border border-yellow-200 rounded px-2 py-1 resize-y focus:outline-none focus:ring-1 focus:ring-yellow-400"
-                      />
+                    <div className="px-2 pb-2 flex flex-col gap-1">
+                      {s.records.length === 0 ? (
+                        <p className="text-[11px] text-yellow-600/60">기록 없음 — 좌석을 클릭해 기록을 추가하세요</p>
+                      ) : (
+                        [...s.records]
+                          .sort(compareRecordsDesc)
+                          .map((r, j) => (
+                            <div key={j} className="text-[11px] text-yellow-900/80 border-t border-yellow-100 pt-1 first:border-t-0 first:pt-0">
+                              <span className="font-medium">{r.movie || '(영화명 없음)'}</span>
+                              {(r.date || r.time) && (
+                                <span className="text-yellow-700/60 ml-1">
+                                  {[r.date, formatRecordTime(r)].filter(Boolean).join(' ')}
+                                </span>
+                              )}
+                              {r.memo && <p className="text-yellow-800/60 whitespace-pre-wrap break-all">{r.memo}</p>}
+                            </div>
+                          ))
+                      )}
                     </div>
                   )}
                 </div>

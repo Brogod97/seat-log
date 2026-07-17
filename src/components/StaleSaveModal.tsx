@@ -18,6 +18,7 @@ interface Props {
 // 상영관 구조가 바뀌어 개인 데이터를 자동 병합하지 못했을 때, 예전 저장 내용을 읽기 전용으로 보여주는 모달.
 // 구조가 여러 번 바뀌었다면 버전이 여러 개 쌓일 수 있어 select로 전환해가며 볼 수 있게 한다.
 // 좌표가 지금 구조와 안 맞을 수 있어 "이 내용으로 되돌리기" 같은 복원 액션은 의도적으로 두지 않음(순수 열람용).
+// inspectOnly: 단순 이미지가 아니라 최신 화면과 동일하게 좌석 클릭→관람 기록 팝업 열람이 가능한 read-only.
 export function StaleSaveModal({ versions, onClose }: Props) {
   const [index, setIndex] = useState(versions.length - 1); // 기본: 가장 최근 버전
   const snapshot = versions[index];
@@ -78,7 +79,9 @@ export function StaleSaveModal({ versions, onClose }: Props) {
           onRemovePrimeRange={noop}
           onAddWatchedRange={noop}
           onToggleWatchedSeat={noop}
-          onSetWatchedMemo={noop}
+          onAddWatchedRecord={noop}
+          onUpdateWatchedRecord={noop}
+          onRemoveWatchedRecord={noop}
           onToggleSightRow={noop}
           onToggleAisle={noop}
           onToggleColAisle={noop}
@@ -86,7 +89,7 @@ export function StaleSaveModal({ versions, onClose }: Props) {
           onSetExcludedSeat={noop}
           onToggleExit={noop}
           isAdmin={false}
-          viewOnly
+          inspectOnly
         />
       </div>
     </div>

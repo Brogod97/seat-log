@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import type { SeatMapConfig, Range, ExitSide, EditMode } from "../types";
+import type {
+  SeatMapConfig,
+  Range,
+  ExitSide,
+  EditMode,
+  WatchedRecord,
+  WatchedSeat,
+} from "../types";
 import { DEFAULT_CONFIG, STORAGE_KEY, loadConfig } from "../utils/storage";
 
 // 좌석표 편집 도메인: config 상태 + 편집 모드 워크플로 + 모든 변형 함수
@@ -110,27 +117,57 @@ export function useSeatMapConfig() {
         ...c,
         watchedSeats: exists
           ? c.watchedSeats.filter((s) => !(s.row === row && s.col === col))
-          : [...c.watchedSeats, { row, col }],
+          : [...c.watchedSeats, { row, col, records: [] }],
       };
     });
   }
 
-  function setWatchedMemo(row: number, col: number, memo: string) {
+  // 관람 기록 CRUD — 같은 날 같은 좌석 재관람도 각각 쌓이도록 고유성 검사 없이 append
+  function addWatchedRecord(row: number, col: number, record: WatchedRecord) {
     setConfig((c) => ({
       ...c,
       watchedSeats: c.watchedSeats.map((s) =>
-        s.row === row && s.col === col ? { ...s, memo } : s,
+        s.row === row && s.col === col
+          ? { ...s, records: [...s.records, record] }
+          : s,
+      ),
+    }));
+  }
+
+  function updateWatchedRecord(
+    row: number,
+    col: number,
+    index: number,
+    record: WatchedRecord,
+  ) {
+    setConfig((c) => ({
+      ...c,
+      watchedSeats: c.watchedSeats.map((s) =>
+        s.row === row && s.col === col
+          ? { ...s, records: s.records.map((r, i) => (i === index ? record : r)) }
+          : s,
+      ),
+    }));
+  }
+
+  function removeWatchedRecord(row: number, col: number, index: number) {
+    setConfig((c) => ({
+      ...c,
+      watchedSeats: c.watchedSeats.map((s) =>
+        s.row === row && s.col === col
+          ? { ...s, records: s.records.filter((_, i) => i !== index) }
+          : s,
       ),
     }));
   }
 
   function addWatchedRange(range: Range) {
     setConfig((c) => {
-      const toAdd: { row: number; col: number }[] = [];
+      const toAdd: WatchedSeat[] = [];
       for (let r = range.rowStart; r <= range.rowEnd; r++) {
         for (let col = range.colStart; col <= range.colEnd; col++) {
           if (!c.watchedSeats.some((s) => s.row === r && s.col === col)) {
-            toAdd.push({ row: r, col });
+            toAdd.push({ row: r, col, records: [] });
           }
         }
       }
@@ -226,7 +263,9 @@ export function useSeatMapConfig() {
     addPrimeRange,
     removePrimeRange,
     toggleWatchedSeat,
-    setWatchedMemo,
+    addWatchedRecord,
+    updateWatchedRecord,
+    removeWatchedRecord,
     addWatchedRange,
     toggleSightRow,
     toggleRowAisle,

@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom'
-import type { SeatMapConfig, Range, ExitSide, EditMode, ZoneMode } from '../types'
+import type { SeatMapConfig, Range, ExitSide, EditMode, ZoneMode, WatchedRecord } from '../types'
 import { calcCenterCols } from '../utils/centerCols'
 import { indexToLabel } from '../utils/rowLabel'
 import { makeSeatGeometry, normalizeRange } from '../utils/seatGeometry'
@@ -22,7 +22,9 @@ interface Props {
   onRemovePrimeRange: (index: number) => void
   onAddWatchedRange: (range: Range) => void
   onToggleWatchedSeat: (row: number, col: number) => void
-  onSetWatchedMemo: (row: number, col: number, memo: string) => void
+  onAddWatchedRecord: (row: number, col: number, record: WatchedRecord) => void
+  onUpdateWatchedRecord: (row: number, col: number, index: number, record: WatchedRecord) => void
+  onRemoveWatchedRecord: (row: number, col: number, index: number) => void
   onToggleSightRow: (row: number) => void
   onToggleAisle: (row: number) => void
   onToggleColAisle: (col: number) => void
@@ -31,6 +33,7 @@ interface Props {
   onToggleExit: (row: number, col: number, side: ExitSide) => void
   isAdmin: boolean
   viewOnly?: boolean
+  inspectOnly?: boolean      // 열람 전용: 좌석 클릭→기록 팝업은 되지만 편집/설정은 불가 (예전 저장 열람용)
   seatMenuAsSheet?: boolean  // 모바일: 좌석 메뉴를 바텀시트로 (시안 5d)
   exitTapMode?: boolean      // 모바일: 가장자리 탭으로 출입구 토글 (시안 5c)
   ghostHideActions?: boolean // 모바일: 고스트 그리드 버튼을 바텀시트에서 렌더
@@ -46,10 +49,13 @@ export default function SeatMapPreview({
   onCancelEditMode, onCompleteEditMode, onSetGridSize,
   onToggleExcludedSeat, onSetExcludedSeat,
   onAddPrimeRange, onRemovePrimeRange,
-  onAddWatchedRange, onToggleWatchedSeat, onSetWatchedMemo, onToggleSightRow,
+  onAddWatchedRange, onToggleWatchedSeat,
+  onAddWatchedRecord, onUpdateWatchedRecord, onRemoveWatchedRecord,
+  onToggleSightRow,
   onToggleAisle, onToggleColAisle, onToggleExit,
   isAdmin,
   viewOnly = false,
+  inspectOnly = false,
   seatMenuAsSheet = false,
   exitTapMode = false,
   ghostHideActions = false,
@@ -58,8 +64,8 @@ export default function SeatMapPreview({
   onZoneModeChange,
   hideZoneToolbar = false,
 }: Props) {
-  // viewOnly(보기 전용)일 땐 편집 상태를 무시해 깔끔한 이미지로만 렌더링
-  const editMode = viewOnly ? null : editModeProp
+  // viewOnly(보기 전용)/inspectOnly(열람 전용)일 땐 편집 상태를 무시해 깔끔한 화면으로만 렌더링
+  const editMode = viewOnly || inspectOnly ? null : editModeProp
   const { rows, cols, rowAisles, colAisles } = config
   const SEAT = 32
   const AISLE = 20  // 복도 폭 (기존 12 → 넓혀 통로가 잘 구분되게)
@@ -439,11 +445,14 @@ export default function SeatMapPreview({
           onEnterModeFrom={onEnterModeFrom}
           onRemovePrimeRange={onRemovePrimeRange}
           onToggleWatchedSeat={onToggleWatchedSeat}
-          onSetWatchedMemo={onSetWatchedMemo}
+          onAddWatchedRecord={onAddWatchedRecord}
+          onUpdateWatchedRecord={onUpdateWatchedRecord}
+          onRemoveWatchedRecord={onRemoveWatchedRecord}
           onToggleSightRow={onToggleSightRow}
           onToggleExcludedSeat={onToggleExcludedSeat}
           onToggleExit={onToggleExit}
           isAdmin={isAdmin}
+          inspectOnly={inspectOnly}
           onHoverHint={setHighlightHint}
           onClose={() => { setPopup(null); setHighlightHint(null) }}
           sheet={seatMenuAsSheet}
