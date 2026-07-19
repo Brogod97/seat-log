@@ -23,6 +23,7 @@ interface Props {
   enterEditMode: (mode: EditMode) => void;
   setGridSize: (rows: number, cols: number) => void;
   presetExists: boolean;
+  presetUpToDate: boolean;
   canPublish: boolean; // 브랜드·지점·상영관이 모두 채워져 게시 가능한지
   onPublish: () => Promise<boolean>;
 }
@@ -45,6 +46,7 @@ export function MobileEditOverlay({
   enterEditMode,
   setGridSize,
   presetExists,
+  presetUpToDate,
   canPublish,
   onPublish,
 }: Props) {
@@ -178,7 +180,7 @@ export function MobileEditOverlay({
             )}
             {/* 공용 레이아웃 게시 — 편집을 마친 뒤 이 화면에서 바로 게시 (동선 개선) */}
             {isAdmin && canPublish && (
-              <PublishLayoutButton presetExists={presetExists} onPublish={onPublish} />
+              <PublishLayoutButton presetExists={presetExists} upToDate={presetUpToDate} onPublish={onPublish} />
             )}
           </>
         )}

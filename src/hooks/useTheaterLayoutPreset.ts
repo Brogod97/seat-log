@@ -250,6 +250,11 @@ export function useTheaterLayoutPreset({ user, config, setConfig, adminMode, sav
     ? !samePersonalData(config, matchingSave)
     : hasPersonalData;
 
+  // 게시 버튼 활성화 판단 (실사용 2차 ③) — 게시본과 현재 구조가 같으면 업데이트할 게 없음.
+  // 미게시 상영관은 항상 게시 가능(첫 게시)
+  const presetUpToDate =
+    presetExists && sameStructure(currentStructure, catalog[configKey(config)]);
+
   // 성공 시 true, 실패 시 false 반환 — 버튼이 로딩/완료 상태를 표시하는 데 사용
   async function publishPreset(): Promise<boolean> {
     if (!admin || !selectionComplete) return false;
@@ -290,6 +295,7 @@ export function useTheaterLayoutPreset({ user, config, setConfig, adminMode, sav
     personalDataRestored,   // 현재 상영관의 개인 저장이 구조 일치로 자동 병합됐는지
     staleVersions,          // 다른 구조로 저장해둔 버전들 (읽기 전용 열람용, 여러 개일 수 있음)
     saveDirty,              // 미저장 변경이 있어 [현재 저장]이 의미 있는 상태인지
+    presetUpToDate,         // 게시본과 현재 구조가 동일해 [이 구조로 업데이트]가 무의미한 상태인지
     publishPreset,
     refetchCatalog: fetchCatalog,
   };

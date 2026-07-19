@@ -20,6 +20,7 @@ interface Props {
   publicTheaters: Record<string, PublicTheaterData>
   catalogLoading: boolean
   presetExists: boolean
+  presetUpToDate: boolean
   onPublishPreset: () => Promise<boolean>
   compact: boolean  // 모바일: 레이아웃 편집/게시는 편집 오버레이에서 하므로 사이드바 버튼은 숨김
   personalDataRestored: boolean          // 개인 저장(시선일치/명당/실관람)이 구조 일치로 자동 병합됐는지
@@ -76,7 +77,7 @@ function EditModeButton({
 export default function SeatMapForm({
   config, onChange, editMode,
   onEnterEditMode, onEnterGridResize, onCancelEditMode, onCompleteEditMode,
-  isAdmin, publicTheaters, catalogLoading, presetExists, onPublishPreset, compact,
+  isAdmin, publicTheaters, catalogLoading, presetExists, presetUpToDate, onPublishPreset, compact,
   personalDataRestored, staleVersions, onViewStaleSnapshot,
 }: Props) {
   function update(partial: Partial<SeatMapConfig>) {
@@ -189,7 +190,7 @@ export default function SeatMapForm({
 
             {/* 공용 레이아웃 게시 — 모바일에선 편집 오버레이로 이동(동선 개선) */}
             {!compact && editMode === null && selectionComplete && (
-              <PublishLayoutButton presetExists={presetExists} onPublish={onPublishPreset} />
+              <PublishLayoutButton presetExists={presetExists} upToDate={presetUpToDate} onPublish={onPublishPreset} />
             )}
           </div>
         </>

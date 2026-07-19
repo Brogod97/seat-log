@@ -88,6 +88,7 @@ function App() {
     personalDataRestored,
     staleVersions,
     saveDirty,
+    presetUpToDate,
     publishPreset,
   } = useTheaterLayoutPreset({ user, config, setConfig, adminMode, saves });
   const [mobileEditOpen, setMobileEditOpen] = useState(false);
@@ -387,6 +388,7 @@ function App() {
           publicTheaters={publicTheaters}
           catalogLoading={catalogLoading}
           presetExists={presetExists}
+          presetUpToDate={presetUpToDate}
           onPublishPreset={publishPreset}
           compact={compact}
           personalDataRestored={personalDataRestored}
@@ -492,6 +494,7 @@ function App() {
             enterEditMode={enterEditMode}
             setGridSize={setGridSize}
             presetExists={presetExists}
+            presetUpToDate={presetUpToDate}
             canPublish={selectionComplete}
             onPublish={publishPreset}
           />
