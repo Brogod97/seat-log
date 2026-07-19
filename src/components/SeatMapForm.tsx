@@ -84,7 +84,16 @@ export default function SeatMapForm({
     onChange({ ...config, ...partial })
   }
 
-  const [expandedWatched, setExpandedWatched] = useState<number | null>(null)
+  // 실관람 기록 요약은 기본 모두 펼침 — 접은 좌석만 기록 (좌석 키 'row-col', 실사용 2차 ⑤)
+  const [collapsedWatched, setCollapsedWatched] = useState<Set<string>>(new Set())
+  function toggleWatchedCollapse(key: string) {
+    setCollapsedWatched((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
 
   const btnProps = {
     currentMode: editMode,
@@ -238,30 +247,33 @@ export default function SeatMapForm({
             {[...config.watchedSeats]
               .map((s, i) => ({ s, i }))
               .sort((a, b) => a.s.row !== b.s.row ? a.s.row - b.s.row : a.s.col - b.s.col)
-              .map(({ s, i }) => (
-                <div key={i} className="rounded bg-yellow-50 border border-yellow-200">
+              .map(({ s, i }) => {
+                const seatKey = `${s.row}-${s.col}`
+                const expanded = !collapsedWatched.has(seatKey)
+                return (
+                <div key={seatKey} className="rounded bg-yellow-50 border border-yellow-200">
                   <div className="flex items-center justify-between px-2 py-1">
                     <button
                       type="button"
-                      onClick={() => setExpandedWatched(expandedWatched === i ? null : i)}
+                      onClick={() => toggleWatchedCollapse(seatKey)}
                       className="flex items-center gap-1.5 text-xs text-yellow-800 hover:text-yellow-900"
                     >
                       <span className="font-medium">{indexToLabel(s.row - 1)}{s.col}</span>
                       {s.records.length > 0 && (
                         <span className="text-[10px] px-1 rounded-full bg-yellow-200 text-yellow-800">{s.records.length}</span>
                       )}
-                      <span className="text-yellow-400">{expandedWatched === i ? '▾' : '▸'}</span>
+                      <span className="text-yellow-400">{expanded ? '▾' : '▸'}</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => {
                         if (s.records.length >= 2 && !confirm(`관람 기록 ${s.records.length}건이 모두 삭제돼요. 실관람을 해제할까요?`)) return
-                        update({ watchedSeats: config.watchedSeats.filter((_, j) => j !== i) }); if (expandedWatched === i) setExpandedWatched(null)
+                        update({ watchedSeats: config.watchedSeats.filter((_, j) => j !== i) })
                       }}
                       className="text-yellow-500 hover:text-red-600 text-xs"
                     >×</button>
                   </div>
-                  {expandedWatched === i && (
+                  {expanded && (
                     <div className="px-2 pb-2 flex flex-col gap-1">
                       {s.records.length === 0 ? (
                         <p className="text-[11px] text-yellow-600/60">기록 없음 — 좌석을 클릭해 기록을 추가하세요</p>
@@ -283,7 +295,8 @@ export default function SeatMapForm({
                     </div>
                   )}
                 </div>
-              ))}
+                )
+              })}
           </div>
         )}
       </Section>
