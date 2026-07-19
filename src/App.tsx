@@ -87,6 +87,7 @@ function App() {
     selectionComplete,
     personalDataRestored,
     staleVersions,
+    saveDirty,
     publishPreset,
   } = useTheaterLayoutPreset({ user, config, setConfig, adminMode, saves });
   const [mobileEditOpen, setMobileEditOpen] = useState(false);
@@ -293,13 +294,18 @@ function App() {
             <button
               type="button"
               onClick={handleSaveClick}
+              // 미저장 변경이 없으면 비활성 (실사용 2차 ②). 저장 직후 애니메이션 중엔 hover색 유지를 위해
+              // 흐림 처리는 idle일 때만 적용 (saving/saved 단계는 disabled여도 진행 표시가 주인공)
+              disabled={!saveDirty}
               style={
                 saveState === "idle"
                   ? undefined
                   : { backgroundColor: "var(--accent-hover)" }
               }
               className={`flex-1 flex items-center justify-center gap-1.5 text-xs px-2 py-1.5 rounded font-medium text-white transition-colors ${
-                saveState === "idle" ? "btn-accent" : ""
+                saveState === "idle"
+                  ? "btn-accent disabled:opacity-40 disabled:cursor-not-allowed"
+                  : ""
               }`}
             >
               {saveState === "saving" && (

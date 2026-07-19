@@ -240,6 +240,16 @@ export function useTheaterLayoutPreset({ user, config, setConfig, adminMode, sav
     ? currentVersions.filter((v) => v !== matchingSave)
     : [];
 
+  // [현재 저장] 활성화 판단 (실사용 2차 ②) — 구조 일치 저장본과 개인 데이터가 같으면 저장할 게 없고,
+  // 일치 버전이 없어도 개인 데이터가 비어 있으면 빈 버전을 저장하는 건 무의미하므로 비활성
+  const hasPersonalData =
+    config.sightRows.length > 0 ||
+    config.primeRanges.length > 0 ||
+    config.watchedSeats.length > 0;
+  const saveDirty = matchingSave
+    ? !samePersonalData(config, matchingSave)
+    : hasPersonalData;
+
   // 성공 시 true, 실패 시 false 반환 — 버튼이 로딩/완료 상태를 표시하는 데 사용
   async function publishPreset(): Promise<boolean> {
     if (!admin || !selectionComplete) return false;
@@ -279,6 +289,7 @@ export function useTheaterLayoutPreset({ user, config, setConfig, adminMode, sav
     selectionComplete,      // 게시 가능한(브랜드·지점·상영관 모두 채워진) 선택인지
     personalDataRestored,   // 현재 상영관의 개인 저장이 구조 일치로 자동 병합됐는지
     staleVersions,          // 다른 구조로 저장해둔 버전들 (읽기 전용 열람용, 여러 개일 수 있음)
+    saveDirty,              // 미저장 변경이 있어 [현재 저장]이 의미 있는 상태인지
     publishPreset,
     refetchCatalog: fetchCatalog,
   };
