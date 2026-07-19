@@ -45,6 +45,11 @@ export function useTheaterLayoutPreset({ user, config, setConfig, adminMode, sav
   // 직전에 적용한 선택 키 — 마운트 시 복원된 선택으로 초기화해, 최초 진입/카탈로그 로드 때는
   // 선택이 "바뀐" 게 아니므로 자동 적용(및 초기화 confirm)을 건너뛴다
   const prevSelKeyRef = useRef(configKey(config));
+  // dirty(미저장 변경) 비교용 — config에 남아 있는 개인 데이터가 "어느 상영관 것인지"를 가리키는
+  // 마지막 완성 선택의 키. prevSelKeyRef는 변경 감지용이라 지점/브랜드 변경 중의 미완성 선택
+  // (부분 키, 예: 'CGV|인천')으로도 덮이는데(6-5 불변식), 그 부분 키로 저장본을 찾으면 저장본이
+  // 있어도 못 찾아 항상 dirty로 오판된다 — 그래서 비교용 키를 분리 (실사용 2차 ①).
+  const lastCompleteKeyRef = useRef(configKey(config));
   // "이 키에 대해 지금 구조와 일치하는 저장 버전을 찾아 확인 완료"로 표시된 키.
   // saves는 로그인 후 Firestore와 비동기로 동기화되므로, 상영관을 선택하는 시점엔 아직 동기화 전이라
   // 매칭되는 버전이 안 보일 수 있다 — 이 경우 null로 남겨두고, saves가 갱신되면 재확인 effect가 재시도한다.
@@ -141,22 +146,24 @@ export function useTheaterLayoutPreset({ user, config, setConfig, adminMode, sav
       // 초기화 등으로 선택이 비워진 경우 — prevSelKeyRef를 그대로 두면, 나중에 초기화 전과
       // 똑같은 상영관을 다시 골랐을 때 "선택이 안 바뀐 것"으로 오인해 자동 적용을 건너뛰게 된다.
       // 이 "빈 선택" 상태도 하나의 선택으로 기록해둬야 다음 선택이 항상 변경으로 인식된다.
+      // 단 lastCompleteKeyRef는 갱신하지 않는다 — config에 남은 개인 데이터는 여전히 직전 완성 선택의 것.
       prevSelKeyRef.current = key;
       mergedKeyRef.current = null;
       return;
     }
     // 선택 키가 실제로 바뀐 경우에만 적용 — 복원/카탈로그 로드 시엔 confirm이 뜨지 않게 함
     if (prevSelKeyRef.current === key) return;
-    const prevKey = prevSelKeyRef.current;
     prevSelKeyRef.current = key;
 
-    // 저장하지 않은 변경사항이 실제로 있을 때만 경고 (이전 상영관의, 같은 구조 저장본과 비교)
+    // 저장하지 않은 변경사항이 실제로 있을 때만 경고. 비교 대상은 부분 키(prevSelKeyRef)가 아니라
+    // 개인 데이터의 출처인 마지막 완성 선택(lastCompleteKeyRef)의 저장본 — 지점/브랜드 변경은
+    // 미완성 선택을 거치므로 부분 키로 찾으면 저장돼 있어도 항상 dirty로 오판된다 (실사용 2차 ①).
     const c = configRef.current;
     const hasPersonalData =
       c.sightRows.length > 0 ||
       c.primeRanges.length > 0 ||
       c.watchedSeats.length > 0;
-    const prevVersions = saves[prevKey] ?? [];
+    const prevVersions = saves[lastCompleteKeyRef.current] ?? [];
     const prevSave = prevVersions.find((v) => sameStructure(c, v));
     const isDirty = hasPersonalData && (!prevSave || !samePersonalData(c, prevSave));
     if (
@@ -167,6 +174,7 @@ export function useTheaterLayoutPreset({ user, config, setConfig, adminMode, sav
     )
       return;
 
+    lastCompleteKeyRef.current = key;
     applySelection(key);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.brand, config.branch, config.screen, catalogLoading]);
