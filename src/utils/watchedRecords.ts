@@ -7,11 +7,12 @@ function sortKey(r: WatchedRecord): string | null {
   return `${r.date}T${r.time ?? '00:00'}`
 }
 
-// 최신순 비교 (날짜 없는 기록은 맨 아래, 그 안에선 입력 순서 유지)
-export function compareRecordsDesc(a: WatchedRecord, b: WatchedRecord): number {
+// 관람일 오름차순 비교 — 오래된 관람이 위, 최근이 아래 (시간순 로그처럼 읽히게).
+// 날짜 없는 기록은 맨 아래, 그 안에선 입력 순서 유지 (실사용 2차 ④: 팝업·사이드바 공통)
+export function compareRecordsAsc(a: WatchedRecord, b: WatchedRecord): number {
   const ka = sortKey(a)
   const kb = sortKey(b)
-  if (ka && kb) return kb.localeCompare(ka)
+  if (ka && kb) return ka.localeCompare(kb)
   if (ka) return -1
   if (kb) return 1
   return 0

@@ -4,7 +4,7 @@ import { indexToLabel } from '../utils/rowLabel'
 import { THEATERS, BRAND_LIST, CUSTOM, isKnownBranch, isKnownScreen } from '../data/theaters'
 import { FREQ_KEY } from '../utils/storage'
 import { screenCompare } from '../utils/sort'
-import { compareRecordsDesc, formatRecordTime } from '../utils/watchedRecords'
+import { compareRecordsAsc, formatRecordTime } from '../utils/watchedRecords'
 import type { PublicTheaterData } from '../hooks/useTheaterLayoutPreset'
 import { PublishLayoutButton } from './PublishLayoutButton'
 
@@ -267,7 +267,7 @@ export default function SeatMapForm({
                         <p className="text-[11px] text-yellow-600/60">기록 없음 — 좌석을 클릭해 기록을 추가하세요</p>
                       ) : (
                         [...s.records]
-                          .sort(compareRecordsDesc)
+                          .sort(compareRecordsAsc)
                           .map((r, j) => (
                             <div key={j} className="text-[11px] text-yellow-900/80 border-t border-yellow-100 pt-1 first:border-t-0 first:pt-0">
                               <span className="font-medium">{r.movie || '(영화명 없음)'}</span>

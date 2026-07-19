@@ -2,7 +2,7 @@ import { useState, useRef, useLayoutEffect, forwardRef } from 'react'
 import type { SeatMapConfig, Range, ExitSide, WatchedRecord } from '../../types'
 import { inRange } from '../../utils/seatGeometry'
 import { indexToLabel } from '../../utils/rowLabel'
-import { compareRecordsDesc, formatRecordTime } from '../../utils/watchedRecords'
+import { compareRecordsAsc, formatRecordTime } from '../../utils/watchedRecords'
 import type { PopupState, HighlightHint } from './previewTypes'
 
 function todayStr(): string {
@@ -77,10 +77,10 @@ export const SeatPopup = forwardRef<HTMLDivElement, SeatPopupProps>(
     ].filter(Boolean) as { side: ExitSide; label: string }[]
     const hasExit = (side: ExitSide) => config.exits.some((s) => s.row === row && s.col === col && s.side === side)
 
-    // 표시: 일시 최신순(익일 반영), 날짜 없는 기록은 맨 아래 (원본 인덱스 보존 — 수정/삭제용)
+    // 표시: 관람일 오름차순(시간순 로그), 날짜 없는 기록은 맨 아래 (원본 인덱스 보존 — 수정/삭제용)
     const sortedRecords = records
       .map((r, i) => ({ r, i }))
-      .sort((a, b) => compareRecordsDesc(a.r, b.r))
+      .sort((a, b) => compareRecordsAsc(a.r, b.r))
 
     function openForm(index: number | 'new') {
       if (index === 'new') {
